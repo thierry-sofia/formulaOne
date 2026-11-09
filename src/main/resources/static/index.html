@@ -43,7 +43,7 @@
 
   <div class="tablewrap">
     <table>
-      <thead><tr><th>Code</th><th>Libellé</th><th class="num">Poids</th><th class="num">Prix</th><th>Modifiée</th></tr></thead>
+      <thead><tr><th>Code</th><th>Libellé</th><th>Source</th><th>Application</th><th class="num">Prix</th><th>Vendue</th><th class="num">Total vendu</th><th class="num">Prix moyen vendu</th><th class="num">Coût prod. moyen</th></tr></thead>
       <tbody id="rows"></tbody>
     </table>
   </div>
@@ -55,6 +55,7 @@
   <section id="detail" hidden>
     <h2 id="d-title" style="font-size:18px;margin:0 0 4px"></h2>
     <p id="d-meta" class="muted" style="margin:0 0 8px"></p>
+    <p id="d-notes" style="margin:0 0 8px;white-space:pre-wrap"></p>
     <div class="tablewrap">
       <table>
         <thead><tr><th>Code matière</th><th>Matière</th><th class="num">Poids</th></tr></thead>
@@ -91,8 +92,10 @@ async function load() {
   for (const f of data.items) {
     const tr = document.createElement('tr');
     tr.className = 'clickable';
-    tr.append(cell(f.FORMULE_CD), cell(f.FORMULE_LIB), cell(f.POIDS_TOTAL, 'num'),
-              cell(f.PRIX, 'num'), cell(f.LAST_MODIFICATION));
+    const vendue = Number(f.TotalVendu) > 0;
+    tr.append(cell(f.FORMULE_CD), cell(f.FORMULE_LIB), cell(f.SOURCE), cell(f.APPLICATION),
+              cell(f.PRIX, 'num'), cell(vendue ? 'Oui' : 'Non'), cell(f.TotalVendu, 'num'),
+              cell(f.PrixMoyenVendu, 'num'), cell(f.CoutProductionMoyen, 'num'));
     tr.onclick = () => showDetail(f.FORMULE_KEY);
     body.append(tr);
   }
@@ -106,7 +109,13 @@ async function showDetail(key) {
   const d = await api('/api/formules/' + encodeURIComponent(key));
   $('d-title').textContent = (d.formule.FORMULE_CD || '') + ' — ' + (d.formule.FORMULE_LIB || '');
   $('d-meta').textContent = 'Source ' + (d.formule.SOURCE || '?') + ' · poids total ' + (d.formule.POIDS_TOTAL ?? '?')
-                          + ' · prix ' + (d.formule.PRIX ?? '?');
+                          + ' · prix ' + (d.formule.PRIX ?? '?')
+                          + ' · application ' + (d.formule.APPLICATION || '?')
+                          + ' · vendue ' + (Number(d.formule.TotalVendu) > 0 ? 'oui' : 'non')
+                          + ' · total vendu ' + (d.formule.TotalVendu ?? '?')
+                          + ' · prix moyen vendu ' + (d.formule.PrixMoyenVendu ?? '?')
+                          + ' · coût prod. moyen ' + (d.formule.CoutProductionMoyen ?? '?');
+  $('d-notes').textContent = d.formule.NOTES || '';
   const body = $('lines');
   body.replaceChildren();
   for (const l of d.lignes) {

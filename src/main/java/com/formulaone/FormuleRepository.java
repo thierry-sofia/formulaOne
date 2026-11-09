@@ -49,7 +49,8 @@ public class FormuleRepository {
         String like = likePattern(q);
         return jdbc.queryForList("""
                 SELECT FORMULE_KEY, RTRIM(SOURCE) AS SOURCE, RTRIM(FORMULE_CD) AS FORMULE_CD,
-                       LTRIM(RTRIM(FORMULE_LIB)) AS FORMULE_LIB, POIDS_TOTAL, PRIX, LAST_MODIFICATION
+                       LTRIM(RTRIM(FORMULE_LIB)) AS FORMULE_LIB, POIDS_TOTAL, PRIX, LAST_MODIFICATION,
+                       TotalVendu, PrixMoyenVendu, CoutProductionMoyen, RTRIM(APPLICATION) AS APPLICATION
                 FROM dbo.FORMULE
                 WHERE (? = '' OR FORMULE_LIB LIKE ? ESCAPE '\\' OR FORMULE_CD LIKE ? ESCAPE '\\')
                   AND (? = '' OR SOURCE = ?)
@@ -62,7 +63,8 @@ public class FormuleRepository {
         return jdbc.queryForList("""
                 SELECT FORMULE_KEY, RTRIM(SOURCE) AS SOURCE, RTRIM(FORMULE_CD) AS FORMULE_CD,
                        LTRIM(RTRIM(FORMULE_LIB)) AS FORMULE_LIB, POIDS_TOTAL, PRIX, PRIX_JMA,
-                       LAST_MODIFICATION, CREATION_AMJ
+                       LAST_MODIFICATION, CREATION_AMJ,
+                       TotalVendu, PrixMoyenVendu, CoutProductionMoyen, RTRIM(APPLICATION) AS APPLICATION, NOTES
                 FROM dbo.FORMULE WHERE FORMULE_KEY = ?
                 """, key);
     }
