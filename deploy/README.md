@@ -27,3 +27,23 @@ Vérifier : `curl -I http://127.0.0.1:9091` (401 = l'application répond et dema
 
 Retour arrière : `sudo cp /home/ubuntu/scentsync.jar.bak /home/ubuntu/scentsync.jar && sudo systemctl restart scentsync.service`
 (l'ancien ScentSync n'est restauré qu'avec son ancien fichier `scentsync.env.ancien`).
+
+## Comptes utilisateurs (login / mot de passe)
+
+Les comptes sont dans `/home/ubuntu/formulaone-users.properties` (une ligne `login=empreinte`), lu au
+démarrage. Le compte `FORMULAONE_USER` / `FORMULAONE_PASSWORD` de `scentsync.env` continue de fonctionner
+en plus. Les mots de passe ne sont jamais stockés en clair : on y met une empreinte BCrypt.
+
+**Ajouter un compte**
+1. Calculer l'empreinte (le mot de passe est saisi sans s'afficher) :
+   `java -jar /home/ubuntu/scentsync.jar hash`
+2. Ajouter la ligne dans le fichier (`chmod 600` la première fois) :
+   `echo 'alice=$2a$10$...' >> /home/ubuntu/formulaone-users.properties`
+   (guillemets simples, sinon le shell mange les `$`).
+3. Redémarrer : `sudo systemctl restart scentsync.service`.
+
+**Changer un mot de passe** : refaire l'étape 1, remplacer l'empreinte de la ligne, redémarrer.
+**Supprimer un compte** : supprimer sa ligne, redémarrer.
+
+Un login ou une empreinte invalide empêche l'application de démarrer (message dans
+`sudo journalctl -u scentsync.service -n 30`). Chemin différent : variable `FORMULAONE_USERS_FILE`.
