@@ -21,13 +21,15 @@ public class FormuleRepository {
         this.jdbc = jdbc;
     }
 
-    /** Neutralise les caracteres speciaux de LIKE pour que la saisie soit prise litteralement. */
-    private static String likePattern(String q) {
-        String escaped = q.replace("\\", "\\\\")
-                          .replace("%", "\\%")
-                          .replace("_", "\\_")
-                          .replace("[", "\\[");
-        return "%" + escaped + "%";
+    /**
+     * Motif LIKE de la recherche. Si la saisie contient un joker SQL (% ou _), elle est utilisee telle quelle
+     * ("toto%" = commence par toto, "%toto" = finit par toto, "t_to" = un caractere quelconque).
+     * Sinon, recherche "contient" (%saisie%). Dans les deux cas, [ et \ restent litteraux.
+     */
+    static String likePattern(String q) {
+        String escaped = q.replace("\\", "\\\\").replace("[", "\\[");
+        boolean joker = q.indexOf('%') >= 0 || q.indexOf('_') >= 0;
+        return joker ? escaped : "%" + escaped + "%";
     }
 
     /** Sources distinctes (liste deroulante), sans les espaces de remplissage des colonnes CHAR. */
@@ -41,7 +43,7 @@ public class FormuleRepository {
         String like = likePattern(q);
         Long n = jdbc.queryForObject("""
                 SELECT COUNT(*) FROM dbo.FORMULE
-                WHERE (? = '' OR FORMULE_LIB LIKE ? ESCAPE '\\' OR FORMULE_CD LIKE ? ESCAPE '\\')
+                WHERE (? = '' OR LTRIM(RTRIM(FORMULE_LIB)) LIKE ? ESCAPE '\\' OR RTRIM(FORMULE_CD) LIKE ? ESCAPE '\\')
                   AND (? = '' OR SOURCE = ?)
                   AND (? = 0 OR (SELECT COUNT(*) FROM dbo.FORMULEDET d WHERE d.FORMULE_KEY = dbo.FORMULE.FORMULE_KEY) <= ?)
                 """, Long.class, q, like, like, source, source, maxLignes, maxLignes);
@@ -56,7 +58,7 @@ public class FormuleRepository {
                        TotalVendu, PrixMoyenVendu, CoutProductionMoyen, RTRIM(APPLICATION) AS APPLICATION,
                        (SELECT COUNT(*) FROM dbo.FORMULEDET d WHERE d.FORMULE_KEY = dbo.FORMULE.FORMULE_KEY) AS NB_INGREDIENTS
                 FROM dbo.FORMULE
-                WHERE (? = '' OR FORMULE_LIB LIKE ? ESCAPE '\\' OR FORMULE_CD LIKE ? ESCAPE '\\')
+                WHERE (? = '' OR LTRIM(RTRIM(FORMULE_LIB)) LIKE ? ESCAPE '\\' OR RTRIM(FORMULE_CD) LIKE ? ESCAPE '\\')
                   AND (? = '' OR SOURCE = ?)
                   AND (? = 0 OR (SELECT COUNT(*) FROM dbo.FORMULEDET d WHERE d.FORMULE_KEY = dbo.FORMULE.FORMULE_KEY) <= ?)
                 ORDER BY FORMULE_LIB, FORMULE_KEY
