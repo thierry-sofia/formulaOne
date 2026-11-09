@@ -56,10 +56,12 @@
     <h2 id="d-title" style="font-size:18px;margin:0 0 4px"></h2>
     <p id="d-meta" class="muted" style="margin:0 0 8px"></p>
     <p id="d-notes" style="margin:0 0 8px;white-space:pre-wrap"></p>
+    <p><a id="d-csv" href="#" download><button type="button">Télécharger en CSV</button></a></p>
     <div class="tablewrap">
       <table>
         <thead><tr><th>Code matière</th><th>Matière</th><th class="num">Poids</th></tr></thead>
         <tbody id="lines"></tbody>
+        <tfoot><tr><th></th><th>Somme des poids</th><th class="num" id="d-sum"></th></tr></tfoot>
       </table>
     </div>
   </section>
@@ -123,6 +125,8 @@ async function showDetail(key) {
     tr.append(cell(l.MATIERE_CD), cell(l.MATIERE_LIB), cell(l.FORMULE_POIDS, 'num'));
     body.append(tr);
   }
+  $('d-sum').textContent = d.sommePoids ?? '';
+  $('d-csv').href = '/api/formules/' + encodeURIComponent(key) + '/csv';
   $('detail').hidden = false;
   $('detail').scrollIntoView({ behavior: 'smooth' });
 }

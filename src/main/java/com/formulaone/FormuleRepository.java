@@ -1,5 +1,7 @@
 package com.formulaone;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.Map;
 
@@ -67,6 +69,13 @@ public class FormuleRepository {
                        TotalVendu, PrixMoyenVendu, CoutProductionMoyen, RTRIM(APPLICATION) AS APPLICATION, NOTES
                 FROM dbo.FORMULE WHERE FORMULE_KEY = ?
                 """, key);
+    }
+
+    /** Somme des poids de la composition (calculee par la base, arrondie a 4 decimales). */
+    public BigDecimal sumPoids(String key) {
+        BigDecimal sum = jdbc.queryForObject(
+                "SELECT SUM(FORMULE_POIDS) FROM dbo.FORMULEDET WHERE FORMULE_KEY = ?", BigDecimal.class, key);
+        return sum == null ? BigDecimal.ZERO : sum.setScale(4, RoundingMode.HALF_UP).stripTrailingZeros();
     }
 
     public List<Map<String, Object>> lines(String key) {
