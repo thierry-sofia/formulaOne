@@ -1,0 +1,16 @@
+[Unit]
+Description=formulaOne - consultation des formules (maBase)
+After=network.target mssql-server.service
+Wants=mssql-server.service
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu
+EnvironmentFile=/home/ubuntu/formulaone.env
+ExecStart=/usr/bin/java -jar /home/ubuntu/formulaone.jar
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
