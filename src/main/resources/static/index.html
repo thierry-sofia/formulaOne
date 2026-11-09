@@ -13,7 +13,10 @@
   body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.5 system-ui, sans-serif; }
   main { max-width: 1000px; margin: 0 auto; padding: 24px 16px; }
   h1 { font-size: 22px; margin: 0 0 16px; }
-  input { width:100%; padding:10px 12px; font:inherit; color:inherit; background:var(--bg);
+  .filters { display:flex; gap:8px; }
+  .filters select { flex:0 0 180px; }
+  .filters input { flex:1; }
+  select, input { width:100%; padding:10px 12px; font:inherit; color:inherit; background:var(--bg);
           border:1px solid var(--line); border-radius:8px; }
   table { width:100%; border-collapse: collapse; margin-top:16px; }
   th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); }
@@ -33,7 +36,10 @@
 <body>
 <main>
   <h1>formulaOne</h1>
-  <input id="q" type="search" placeholder="Rechercher une formule (libellé ou code)" autofocus>
+  <div class="filters">
+    <select id="source" aria-label="Source"><option value="">Toutes les sources</option></select>
+    <input id="q" type="search" placeholder="Partie du nom ou du code de la formule" autofocus>
+  </div>
 
   <div class="tablewrap">
     <table>
@@ -78,7 +84,7 @@ async function api(url) {
 
 async function load() {
   const q = $('q').value.trim();
-  const data = await api('/api/formules?q=' + encodeURIComponent(q) + '&page=' + page + '&size=' + SIZE);
+  const data = await api('/api/formules?q=' + encodeURIComponent(q) + '&source=' + encodeURIComponent($('source').value) + '&page=' + page + '&size=' + SIZE);
   total = data.total;
   const body = $('rows');
   body.replaceChildren();
@@ -113,8 +119,10 @@ async function showDetail(key) {
 }
 
 $('q').addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => { page = 0; load(); }, 250); });
+$('source').addEventListener('change', () => { page = 0; load(); });
 $('prev').onclick = () => { page--; load(); };
 $('next').onclick = () => { page++; load(); };
+api('/api/formules/sources').then(list => { for (const v of list) { const o = document.createElement('option'); o.value = v; o.textContent = v; $('source').append(o); } }).catch(() => {});
 load().catch(e => { $('count').textContent = e.message; });
 </script>
 </body>

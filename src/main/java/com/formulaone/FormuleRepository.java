@@ -28,29 +28,40 @@ public class FormuleRepository {
         return "%" + escaped + "%";
     }
 
-    public long count(String q) {
+    /** Sources distinctes (liste deroulante), sans les espaces de remplissage des colonnes CHAR. */
+    public List<String> sources() {
+        return jdbc.queryForList("""
+                SELECT DISTINCT RTRIM(SOURCE) FROM dbo.FORMULE WHERE SOURCE IS NOT NULL ORDER BY 1
+                """, String.class);
+    }
+
+    public long count(String q, String source) {
         String like = likePattern(q);
         Long n = jdbc.queryForObject("""
                 SELECT COUNT(*) FROM dbo.FORMULE
                 WHERE (? = '' OR FORMULE_LIB LIKE ? ESCAPE '\\' OR FORMULE_CD LIKE ? ESCAPE '\\')
-                """, Long.class, q, like, like);
+                  AND (? = '' OR SOURCE = ?)
+                """, Long.class, q, like, like, source, source);
         return n == null ? 0 : n;
     }
 
-    public List<Map<String, Object>> search(String q, int page, int size) {
+    public List<Map<String, Object>> search(String q, String source, int page, int size) {
         String like = likePattern(q);
         return jdbc.queryForList("""
-                SELECT FORMULE_KEY, SOURCE, FORMULE_CD, FORMULE_LIB, POIDS_TOTAL, PRIX, LAST_MODIFICATION
+                SELECT FORMULE_KEY, RTRIM(SOURCE) AS SOURCE, RTRIM(FORMULE_CD) AS FORMULE_CD,
+                       LTRIM(RTRIM(FORMULE_LIB)) AS FORMULE_LIB, POIDS_TOTAL, PRIX, LAST_MODIFICATION
                 FROM dbo.FORMULE
                 WHERE (? = '' OR FORMULE_LIB LIKE ? ESCAPE '\\' OR FORMULE_CD LIKE ? ESCAPE '\\')
+                  AND (? = '' OR SOURCE = ?)
                 ORDER BY FORMULE_LIB, FORMULE_KEY
                 OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
-                """, q, like, like, page * size, size);
+                """, q, like, like, source, source, page * size, size);
     }
 
     public List<Map<String, Object>> findByKey(String key) {
         return jdbc.queryForList("""
-                SELECT FORMULE_KEY, SOURCE, FORMULE_CD, FORMULE_LIB, POIDS_TOTAL, PRIX, PRIX_JMA,
+                SELECT FORMULE_KEY, RTRIM(SOURCE) AS SOURCE, RTRIM(FORMULE_CD) AS FORMULE_CD,
+                       LTRIM(RTRIM(FORMULE_LIB)) AS FORMULE_LIB, POIDS_TOTAL, PRIX, PRIX_JMA,
                        LAST_MODIFICATION, CREATION_AMJ
                 FROM dbo.FORMULE WHERE FORMULE_KEY = ?
                 """, key);

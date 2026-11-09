@@ -24,23 +24,34 @@ public class FormuleController {
         this.repo = repo;
     }
 
-    /** Recherche paginee par libelle ou code de formule. */
+    /** Sources disponibles (liste deroulante de la recherche). */
+    @GetMapping("/sources")
+    public List<String> sources() {
+        return repo.sources();
+    }
+
+    /** Recherche paginee par libelle ou code de formule, filtree par source si elle est donnee. */
     @GetMapping
     public Map<String, Object> search(@RequestParam(defaultValue = "") String q,
+                                      @RequestParam(defaultValue = "") String source,
                                       @RequestParam(defaultValue = "0") int page,
                                       @RequestParam(defaultValue = "25") int size) {
         String term = q.trim();
         if (term.length() > 100) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Recherche trop longue");
         }
+        String src = source.trim();
+        if (src.length() > 50) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Source invalide");
+        }
         int safePage = Math.max(page, 0);
         int safeSize = Math.min(Math.max(size, 1), MAX_SIZE);
 
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("total", repo.count(term));
+        result.put("total", repo.count(term, src));
         result.put("page", safePage);
         result.put("size", safeSize);
-        result.put("items", repo.search(term, safePage, safeSize));
+        result.put("items", repo.search(term, src, safePage, safeSize));
         return result;
     }
 
