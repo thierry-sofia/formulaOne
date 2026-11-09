@@ -95,11 +95,22 @@ public class FormuleController {
         sb.append(cell(cd)).append(';').append(cell(lib)).append(";;TOTAL;")
           .append(number(repo.sumPoids(key))).append("\r\n");
 
-        String fileName = "formule_" + (cd.isBlank() ? key : cd).replaceAll("[^A-Za-z0-9._-]", "_") + ".csv";
+        String base = safeName(cd.isBlank() ? key : cd);
+        String nom = safeName(lib);
+        String fileName = "formule_" + base + (nom.isEmpty() ? "" : "_" + nom) + ".csv";
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"")
                 .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
                 .body(sb.toString().getBytes(StandardCharsets.UTF_8));
+    }
+
+    /** Partie de nom de fichier : accents retires, caracteres hors [A-Za-z0-9.-] remplaces par _, 60 caracteres au plus. */
+    private static String safeName(String s) {
+        String n = java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{M}+", "")
+                .replaceAll("[^A-Za-z0-9.-]+", "_")
+                .replaceAll("^_+|_+$", "");
+        return n.length() > 60 ? n.substring(0, 60).replaceAll("_+$", "") : n;
     }
 
     private static String text(Object o) {
