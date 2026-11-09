@@ -37,7 +37,7 @@
 </head>
 <body>
 <main>
-  <h1>formulaOne</h1>
+  <h1>formulaOne <a id="lien-comptes" href="/admin-comptes.html" hidden style="font-size:13px;font-weight:400;margin-left:12px">Comptes</a></h1>
   <div class="filters">
     <select id="source" aria-label="Source"><option value="">Toutes les sources</option></select>
     <input id="q" type="search" placeholder="Nom ou code (jokers SQL : toto% = commence par toto, %toto, t_to)" autofocus>
@@ -150,6 +150,7 @@ document.querySelectorAll('th.sortable').forEach(th => th.addEventListener('clic
 }));
 $('prev').onclick = () => { page--; load(); };
 $('next').onclick = () => { page++; load(); };
+api('/api/me').then(m => { if (m.admin) $('lien-comptes').hidden = false; }).catch(() => {});
 api('/api/formules/sources').then(list => { for (const v of list) { const o = document.createElement('option'); o.value = v; o.textContent = v; $('source').append(o); } }).catch(() => {});
 load().catch(e => { $('count').textContent = e.message; });
 </script>

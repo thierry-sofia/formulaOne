@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>formulaOne — Comptes</title>
+<style>
+  :root { --bg:#fff; --fg:#1d2433; --muted:#5b6577; --line:#d9dee7; --accent:#2f5bd8; --row:#f4f6fa; --err:#b3261e; --ok:#1b7f3b; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14171f; --fg:#e8ebf2; --muted:#9aa4b8; --line:#2a3040; --accent:#7a9bff; --row:#1b1f2a; --err:#ff8a80; --ok:#6fd58c; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.5 system-ui, sans-serif; }
+  main { max-width: 800px; margin: 0 auto; padding: 24px 16px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 { font-size: 17px; margin: 28px 0 8px; }
+  a { color: var(--accent); }
+  input, select { padding:9px 11px; font:inherit; color:inherit; background:var(--bg); border:1px solid var(--line); border-radius:8px; }
+  button { padding:8px 14px; font:inherit; color:inherit; background:var(--row); border:1px solid var(--line); border-radius:8px; cursor:pointer; }
+  button.danger { color:var(--err); }
+  table { width:100%; border-collapse: collapse; }
+  th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  th { color:var(--muted); font-weight:600; font-size:13px; }
+  .tablewrap { overflow-x:auto; }
+  .actions { display:flex; gap:6px; flex-wrap:wrap; }
+  .form { display:grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap:8px; align-items:end; }
+  .form label { display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--muted); }
+  .muted { color:var(--muted); }
+  #msg { min-height:1.4em; margin:12px 0; font-weight:600; }
+  #msg.err { color:var(--err); } #msg.ok { color:var(--ok); }
+  dialog { background:var(--bg); color:var(--fg); border:1px solid var(--line); border-radius:12px; padding:20px; max-width:360px; width:90%; }
+  dialog::backdrop { background:rgba(0,0,0,.45); }
+  dialog form { display:flex; flex-direction:column; gap:10px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Comptes</h1>
+  <p class="muted" style="margin:0"><a href="/">← Retour aux formules</a> · connecté : <strong id="moi"></strong></p>
+  <div id="msg" role="status"></div>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Login</th><th>Rôle</th><th>Actions</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+
+  <h2>Nouveau compte</h2>
+  <form id="creer" class="form" autocomplete="off">
+    <label>Login <input id="n-login" required minlength="3" maxlength="50" pattern="[A-Za-z0-9._@\-]+" autocomplete="off"></label>
+    <label>Mot de passe (10 caractères au moins) <input id="n-mdp" type="password" required minlength="10" autocomplete="new-password"></label>
+    <label>Rôle
+      <select id="n-role"><option value="USER">Utilisateur (lecture)</option><option value="ADMIN">Administrateur</option></select>
+    </label>
+    <button type="submit">Créer le compte</button>
+  </form>
+
+  <dialog id="dlg">
+    <form method="dialog" id="dlg-form">
+      <strong id="dlg-titre"></strong>
+      <input id="dlg-mdp" type="password" minlength="10" placeholder="Nouveau mot de passe (10 caractères au moins)" autocomplete="new-password">
+      <div class="actions"><button value="ok" id="dlg-ok">Enregistrer</button><button value="cancel" formnovalidate>Annuler</button></div>
+    </form>
+  </dialog>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const HEADERS = { 'Content-Type': 'application/json', 'X-Requested-With': 'formulaone' };
+let moi = '';
+
+function message(texte, ok) { const m = $('msg'); m.textContent = texte; m.className = ok ? 'ok' : 'err'; }
+
+async function appel(url, options) {
+  const r = await fetch(url, options);
+  let corps = null;
+  try { corps = await r.json(); } catch (e) { /* corps vide */ }
+  if (!r.ok) throw new Error((corps && corps.message) || ('Erreur ' + r.status));
+  return corps;
+}
+
+function bouton(texte, classe, action) {
+  const b = document.createElement('button');
+  b.type = 'button'; b.textContent = texte; if (classe) b.className = classe;
+  b.onclick = action;
+  return b;
+}
+
+async function charger() {
+  const comptes = await appel('/api/admin/comptes');
+  const body = $('rows');
+  body.replaceChildren();
+  for (const c of comptes) {                       // textContent : pas d'injection HTML
+    const tr = document.createElement('tr');
+    const tdLogin = document.createElement('td'); tdLogin.textContent = c.login;
+    const tdRole = document.createElement('td'); tdRole.textContent = c.role === 'ADMIN' ? 'Administrateur' : 'Utilisateur';
+    const tdAct = document.createElement('td'); tdAct.className = 'actions';
+    if (c.compteServeur) {
+      const note = document.createElement('span'); note.className = 'muted';
+      note.textContent = 'compte du serveur (mot de passe dans scentsync.env)';
+      tdAct.append(note);
+    } else {
+      tdAct.append(
+        bouton('Mot de passe', '', () => changerMotDePasse(c.login)),
+        bouton(c.role === 'ADMIN' ? 'Passer utilisateur' : 'Passer administrateur', '', () => changerRole(c.login, c.role === 'ADMIN' ? 'USER' : 'ADMIN')),
+        bouton('Supprimer', 'danger', () => supprimer(c.login)));
+    }
+    tr.append(tdLogin, tdRole, tdAct);
+    body.append(tr);
+  }
+}
+
+async function agir(promesse, texteOk) {
+  try { await promesse; message(texteOk, true); await charger(); }
+  catch (e) { message(e.message, false); }
+}
+
+const enc = encodeURIComponent;
+
+function supprimer(login) {
+  if (!confirm('Supprimer le compte « ' + login + ' » ?')) return;
+  agir(appel('/api/admin/comptes/' + enc(login), { method: 'DELETE', headers: HEADERS }), 'Compte supprimé');
+}
+
+function changerRole(login, role) {
+  agir(appel('/api/admin/comptes/' + enc(login) + '/role', { method: 'PUT', headers: HEADERS, body: JSON.stringify({ role }) }), 'Rôle modifié');
+}
+
+function changerMotDePasse(login) {
+  $('dlg-titre').textContent = 'Nouveau mot de passe de « ' + login + ' »';
+  $('dlg-mdp').value = '';
+  $('dlg').returnValue = '';
+  $('dlg').showModal();
+  $('dlg').onclose = () => {
+    const mdp = $('dlg-mdp').value;
+    $('dlg-mdp').value = '';
+    if ($('dlg').returnValue !== 'ok') return;
+    agir(appel('/api/admin/comptes/' + enc(login) + '/password', { method: 'PUT', headers: HEADERS, body: JSON.stringify({ password: mdp }) }), 'Mot de passe modifié');
+  };
+}
+
+$('creer').addEventListener('submit', e => {
+  e.preventDefault();
+  const corps = JSON.stringify({ login: $('n-login').value.trim(), password: $('n-mdp').value, role: $('n-role').value });
+  agir(appel('/api/admin/comptes', { method: 'POST', headers: HEADERS, body: corps }).then(() => {
+    $('n-login').value = ''; $('n-mdp').value = '';
+  }), 'Compte créé');
+});
+
+appel('/api/me').then(m => { moi = m.login; $('moi').textContent = m.login; }).catch(() => {});
+charger().catch(e => message(e.message, false));
+</script>
+</body>
+</html>

@@ -30,20 +30,20 @@ Retour arrière : `sudo cp /home/ubuntu/scentsync.jar.bak /home/ubuntu/scentsync
 
 ## Comptes utilisateurs (login / mot de passe)
 
-Les comptes sont dans `/home/ubuntu/formulaone-users.properties` (une ligne `login=empreinte`), lu au
-démarrage. Le compte `FORMULAONE_USER` / `FORMULAONE_PASSWORD` de `scentsync.env` continue de fonctionner
-en plus. Les mots de passe ne sont jamais stockés en clair : on y met une empreinte BCrypt.
+**Écran d'administration** : `https://explore.aquilegia.pro:8091/admin-comptes.html` (lien « Comptes » à côté du
+titre, visible des administrateurs seulement). On y crée un compte, change un mot de passe ou un rôle, supprime un compte.
+Chaque modification est écrite tout de suite dans `/home/ubuntu/formulaone-users.properties` et prise en compte
+sans redémarrage.
 
-**Ajouter un compte**
-1. Calculer l'empreinte (le mot de passe est saisi sans s'afficher) :
-   `java -jar /home/ubuntu/scentsync.jar hash`
-2. Ajouter la ligne dans le fichier (`chmod 600` la première fois) :
-   `echo 'alice=$2a$10$...' >> /home/ubuntu/formulaone-users.properties`
-   (guillemets simples, sinon le shell mange les `$`).
-3. Redémarrer : `sudo systemctl restart scentsync.service`.
+- **Rôles** : *Administrateur* (gère les comptes) ou *Utilisateur* (lecture des formules).
+- **Compte du serveur** : `FORMULAONE_USER` / `FORMULAONE_PASSWORD` de `scentsync.env` reste administrateur. Il apparaît
+  dans la liste mais ne se modifie que dans `scentsync.env`. Il garantit qu'il y a toujours un administrateur.
+- **Règles** : login de 3 à 50 caractères (lettres, chiffres, `. _ @ -`), mot de passe de 10 caractères au moins,
+  pas de doublon (majuscules ignorées), on ne supprime pas son propre compte, on ne retire pas le dernier administrateur.
+- Mots de passe stockés uniquement sous forme d'empreinte BCrypt (jamais en clair, jamais dans les journaux).
+- Le dossier `/home/ubuntu` doit être inscriptible par l'utilisateur du service (c'est le cas : `User=ubuntu`).
 
-**Changer un mot de passe** : refaire l'étape 1, remplacer l'empreinte de la ligne, redémarrer.
-**Supprimer un compte** : supprimer sa ligne, redémarrer.
-
-Un login ou une empreinte invalide empêche l'application de démarrer (message dans
-`sudo journalctl -u scentsync.service -n 30`). Chemin différent : variable `FORMULAONE_USERS_FILE`.
+**Sans l'écran (dépannage)** : le fichier est lisible, une ligne par compte `login=empreinte;ROLE` (`ROLE` = `ADMIN`
+ou `USER`, `USER` si absent). Une empreinte : `java -jar /home/ubuntu/scentsync.jar hash`. Redémarrer le service après
+une modification à la main. Une ligne invalide empêche l'application de démarrer
+(`sudo journalctl -u scentsync.service -n 30`). Autre chemin : variable `FORMULAONE_USERS_FILE`.
