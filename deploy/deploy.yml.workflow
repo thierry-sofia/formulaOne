@@ -1,6 +1,6 @@
 name: Deploy
 
-# Construit le jar et le deploie sur formulaone.service (127.0.0.1:8095) a chaque
+# Construit le jar et le deploie sur scentsync.service (127.0.0.1:8091) a chaque
 # push sur main, ou a la demande (Actions > Deploy > Run workflow).
 # Meme principe que le deploiement de ParfumIQ / ScentSync.
 #
@@ -9,12 +9,12 @@ name: Deploy
 #   VPS_SSH_KEY, VPS_HOST, VPS_USER, VPS_PORT
 #
 # Prerequis cote VPS (une seule fois) : voir deploy/README.md
-# (formulaone.env, formulaone.service, nginx).
+# (scentsync.env, scentsync.service).
 #
-# Le jar precedent est conserve (/home/ubuntu/formulaone.jar.bak) pour un
+# Le jar precedent est conserve (/home/ubuntu/scentsync.jar.bak) pour un
 # retour arriere rapide :
-#   sudo cp /home/ubuntu/formulaone.jar.bak /home/ubuntu/formulaone.jar
-#   sudo systemctl restart formulaone.service
+#   sudo cp /home/ubuntu/scentsync.jar.bak /home/ubuntu/scentsync.jar
+#   sudo systemctl restart scentsync.service
 
 on:
   push:
@@ -55,10 +55,10 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT }}
           source: "target/formulaone.jar"
-          target: "/home/ubuntu/formulaone-upload"
+          target: "/home/ubuntu/scentsync-upload"
           strip_components: 1
 
-      - name: Restart formulaone service
+      - name: Restart scentsync service
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -67,9 +67,9 @@ jobs:
           port: ${{ secrets.VPS_PORT }}
           script: |
             set -e
-            [ -f /home/ubuntu/formulaone.jar ] && cp /home/ubuntu/formulaone.jar /home/ubuntu/formulaone.jar.bak
-            mv /home/ubuntu/formulaone-upload/formulaone.jar /home/ubuntu/formulaone.jar
-            rmdir /home/ubuntu/formulaone-upload
-            sudo systemctl restart formulaone.service
+            [ -f /home/ubuntu/scentsync.jar ] && cp /home/ubuntu/scentsync.jar /home/ubuntu/scentsync.jar.bak
+            mv /home/ubuntu/scentsync-upload/formulaone.jar /home/ubuntu/scentsync.jar
+            rmdir /home/ubuntu/scentsync-upload
+            sudo systemctl restart scentsync.service
             sleep 5
-            sudo systemctl is-active formulaone.service
+            sudo systemctl is-active scentsync.service

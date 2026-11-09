@@ -1,5 +1,5 @@
 [Unit]
-Description=formulaOne - consultation des formules (maBase)
+Description=ScentSync (= formulaOne) - consultation des formules (maBase)
 After=network.target mssql-server.service
 Wants=mssql-server.service
 
@@ -7,8 +7,8 @@ Wants=mssql-server.service
 Type=simple
 User=ubuntu
 WorkingDirectory=/home/ubuntu
-EnvironmentFile=/home/ubuntu/formulaone.env
-ExecStart=/usr/bin/java -jar /home/ubuntu/formulaone.jar
+EnvironmentFile=/home/ubuntu/scentsync.env
+ExecStart=/usr/bin/java -jar /home/ubuntu/scentsync.jar
 Restart=on-failure
 RestartSec=5
 
