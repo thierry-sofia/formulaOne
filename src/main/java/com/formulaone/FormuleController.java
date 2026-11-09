@@ -39,6 +39,7 @@ public class FormuleController {
     @GetMapping
     public Map<String, Object> search(@RequestParam(defaultValue = "") String q,
                                       @RequestParam(defaultValue = "") String source,
+                                      @RequestParam(defaultValue = "0") int maxLignes,
                                       @RequestParam(defaultValue = "0") int page,
                                       @RequestParam(defaultValue = "25") int size) {
         String term = q.trim();
@@ -53,10 +54,10 @@ public class FormuleController {
         int safeSize = Math.min(Math.max(size, 1), MAX_SIZE);
 
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("total", repo.count(term, src));
+        result.put("total", repo.count(term, src, Math.max(maxLignes, 0)));
         result.put("page", safePage);
         result.put("size", safeSize);
-        result.put("items", repo.search(term, src, safePage, safeSize));
+        result.put("items", repo.search(term, src, Math.max(maxLignes, 0), safePage, safeSize));
         return result;
     }
 
@@ -69,7 +70,9 @@ public class FormuleController {
         }
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("formule", found.get(0));
-        result.put("lignes", repo.lines(key));
+        List<Map<String, Object>> lignes = repo.lines(key);
+        result.put("lignes", lignes);
+        result.put("nbIngredients", lignes.size());
         result.put("sommePoids", repo.sumPoids(key));
         return result;
     }

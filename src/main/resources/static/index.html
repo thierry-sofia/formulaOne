@@ -39,11 +39,12 @@
   <div class="filters">
     <select id="source" aria-label="Source"><option value="">Toutes les sources</option></select>
     <input id="q" type="search" placeholder="Partie du nom ou du code de la formule" autofocus>
+    <input id="max" type="number" min="1" step="1" placeholder="Ingrédients max" aria-label="Nombre maximal d'ingrédients" style="flex:0 0 150px">
   </div>
 
   <div class="tablewrap">
     <table>
-      <thead><tr><th>Code</th><th>Libellé</th><th>Source</th><th>Application</th><th class="num">Prix</th><th>Vendue</th><th class="num">Total vendu</th><th class="num">Prix moyen vendu</th><th class="num">Coût prod. moyen</th></tr></thead>
+      <thead><tr><th>Code</th><th>Libellé</th><th>Source</th><th>Application</th><th class="num">Ingrédients</th><th class="num">Prix</th><th>Vendue</th><th class="num">Total vendu</th><th class="num">Prix moyen vendu</th><th class="num">Coût prod. moyen</th></tr></thead>
       <tbody id="rows"></tbody>
     </table>
   </div>
@@ -87,7 +88,7 @@ async function api(url) {
 
 async function load() {
   const q = $('q').value.trim();
-  const data = await api('/api/formules?q=' + encodeURIComponent(q) + '&source=' + encodeURIComponent($('source').value) + '&page=' + page + '&size=' + SIZE);
+  const data = await api('/api/formules?q=' + encodeURIComponent(q) + '&source=' + encodeURIComponent($('source').value) + '&maxLignes=' + encodeURIComponent($('max').value || 0) + '&page=' + page + '&size=' + SIZE);
   total = data.total;
   const body = $('rows');
   body.replaceChildren();
@@ -95,7 +96,7 @@ async function load() {
     const tr = document.createElement('tr');
     tr.className = 'clickable';
     const vendue = Number(f.TotalVendu) > 0;
-    tr.append(cell(f.FORMULE_CD), cell(f.FORMULE_LIB), cell(f.SOURCE), cell(f.APPLICATION),
+    tr.append(cell(f.FORMULE_CD), cell(f.FORMULE_LIB), cell(f.SOURCE), cell(f.APPLICATION), cell(f.NB_INGREDIENTS, 'num'),
               cell(f.PRIX, 'num'), cell(vendue ? 'Oui' : 'Non'), cell(f.TotalVendu, 'num'),
               cell(f.PrixMoyenVendu, 'num'), cell(f.CoutProductionMoyen, 'num'));
     tr.onclick = () => showDetail(f.FORMULE_KEY);
@@ -112,6 +113,7 @@ async function showDetail(key) {
   $('d-title').textContent = (d.formule.FORMULE_CD || '') + ' — ' + (d.formule.FORMULE_LIB || '');
   $('d-meta').textContent = 'Source ' + (d.formule.SOURCE || '?') + ' · poids total ' + (d.formule.POIDS_TOTAL ?? '?')
                           + ' · prix ' + (d.formule.PRIX ?? '?')
+                          + ' · ' + d.nbIngredients + ' ingrédient(s)'
                           + ' · application ' + (d.formule.APPLICATION || '?')
                           + ' · vendue ' + (Number(d.formule.TotalVendu) > 0 ? 'oui' : 'non')
                           + ' · total vendu ' + (d.formule.TotalVendu ?? '?')
@@ -132,6 +134,7 @@ async function showDetail(key) {
 }
 
 $('q').addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => { page = 0; load(); }, 250); });
+$('max').addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => { page = 0; load(); }, 400); });
 $('source').addEventListener('change', () => { page = 0; load(); });
 $('prev').onclick = () => { page--; load(); };
 $('next').onclick = () => { page++; load(); };
