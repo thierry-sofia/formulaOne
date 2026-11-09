@@ -40,6 +40,8 @@ public class FormuleController {
     public Map<String, Object> search(@RequestParam(defaultValue = "") String q,
                                       @RequestParam(defaultValue = "") String source,
                                       @RequestParam(defaultValue = "0") int maxLignes,
+                                      @RequestParam(defaultValue = "nom") String sort,
+                                      @RequestParam(defaultValue = "asc") String dir,
                                       @RequestParam(defaultValue = "0") int page,
                                       @RequestParam(defaultValue = "25") int size) {
         String term = q.trim();
@@ -57,7 +59,7 @@ public class FormuleController {
         result.put("total", repo.count(term, src, Math.max(maxLignes, 0)));
         result.put("page", safePage);
         result.put("size", safeSize);
-        result.put("items", repo.search(term, src, Math.max(maxLignes, 0), safePage, safeSize));
+        result.put("items", repo.search(term, src, Math.max(maxLignes, 0), sort, "desc".equalsIgnoreCase(dir), safePage, safeSize));
         return result;
     }
 

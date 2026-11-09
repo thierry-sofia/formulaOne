@@ -50,8 +50,18 @@ public class FormuleRepository {
         return n == null ? 0 : n;
     }
 
-    public List<Map<String, Object>> search(String q, String source, int maxLignes, int page, int size) {
+    /** Colonnes de tri autorisees (liste blanche : jamais de texte de l'utilisateur dans le SQL). */
+    private static final Map<String, String> TRIS = Map.of(
+            "nom", "LTRIM(RTRIM(FORMULE_LIB))",
+            "code", "RTRIM(FORMULE_CD)",
+            "modif", "LAST_MODIFICATION",
+            "prix", "PRIX");
+
+    public List<Map<String, Object>> search(String q, String source, int maxLignes, String sort, boolean desc,
+                                            int page, int size) {
         String like = likePattern(q);
+        String colonne = TRIS.getOrDefault(sort, TRIS.get("nom"));
+        String ordre = colonne + (desc ? " DESC" : " ASC") + ", FORMULE_KEY";
         return jdbc.queryForList("""
                 SELECT FORMULE_KEY, RTRIM(SOURCE) AS SOURCE, RTRIM(FORMULE_CD) AS FORMULE_CD,
                        LTRIM(RTRIM(FORMULE_LIB)) AS FORMULE_LIB, POIDS_TOTAL, PRIX, LAST_MODIFICATION,
@@ -61,9 +71,9 @@ public class FormuleRepository {
                 WHERE (? = '' OR LTRIM(RTRIM(FORMULE_LIB)) LIKE ? ESCAPE '\\' OR RTRIM(FORMULE_CD) LIKE ? ESCAPE '\\')
                   AND (? = '' OR SOURCE = ?)
                   AND (? = 0 OR (SELECT COUNT(*) FROM dbo.FORMULEDET d WHERE d.FORMULE_KEY = dbo.FORMULE.FORMULE_KEY) <= ?)
-                ORDER BY FORMULE_LIB, FORMULE_KEY
+                ORDER BY %s
                 OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
-                """, q, like, like, source, source, maxLignes, maxLignes, page * size, size);
+                """.formatted(ordre), q, like, like, source, source, maxLignes, maxLignes, page * size, size);
     }
 
     public List<Map<String, Object>> findByKey(String key) {

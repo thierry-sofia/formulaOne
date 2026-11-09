@@ -24,6 +24,8 @@
   tbody tr.clickable { cursor:pointer; }
   tbody tr.clickable:hover { background:var(--row); }
   td.num, th.num { text-align:right; font-variant-numeric: tabular-nums; }
+  th.sortable { cursor:pointer; user-select:none; white-space:nowrap; }
+  th.sortable:hover { color:var(--fg); }
   .muted { color:var(--muted); }
   .bar { display:flex; justify-content:space-between; align-items:center; margin-top:12px; gap:8px; }
   button { padding:8px 14px; font:inherit; color:inherit; background:var(--row);
@@ -44,7 +46,7 @@
 
   <div class="tablewrap">
     <table>
-      <thead><tr><th>Code</th><th>Libellé</th><th>Source</th><th>Application</th><th class="num">Ingrédients</th><th class="num">Prix</th><th>Vendue</th><th class="num">Total vendu</th><th class="num">Prix moyen vendu</th><th class="num">Coût prod. moyen</th></tr></thead>
+      <thead><tr><th class="sortable" data-sort="code">Code</th><th class="sortable" data-sort="nom">Libellé</th><th>Source</th><th>Application</th><th class="num">Ingrédients</th><th class="num sortable" data-sort="prix">Prix</th><th class="num sortable" data-sort="modif">Dernière modification</th><th>Vendue</th><th class="num">Total vendu</th><th class="num">Prix moyen vendu</th><th class="num">Coût prod. moyen</th></tr></thead>
       <tbody id="rows"></tbody>
     </table>
   </div>
@@ -70,7 +72,8 @@
 
 <script>
 const SIZE = 25;
-let page = 0, total = 0, timer = null;
+let page = 0, total = 0, timer = null, sort = 'nom', dir = 'asc';
+const dateCourte = v => v ? String(v).slice(0, 10) : '';
 const $ = id => document.getElementById(id);
 
 function cell(text, cls) {
@@ -88,7 +91,7 @@ async function api(url) {
 
 async function load() {
   const q = $('q').value.trim();
-  const data = await api('/api/formules?q=' + encodeURIComponent(q) + '&source=' + encodeURIComponent($('source').value) + '&maxLignes=' + encodeURIComponent($('max').value || 0) + '&page=' + page + '&size=' + SIZE);
+  const data = await api('/api/formules?q=' + encodeURIComponent(q) + '&source=' + encodeURIComponent($('source').value) + '&maxLignes=' + encodeURIComponent($('max').value || 0) + '&sort=' + sort + '&dir=' + dir + '&page=' + page + '&size=' + SIZE);
   total = data.total;
   const body = $('rows');
   body.replaceChildren();
@@ -97,13 +100,16 @@ async function load() {
     tr.className = 'clickable';
     const vendue = Number(f.TotalVendu) > 0;
     tr.append(cell(f.FORMULE_CD), cell(f.FORMULE_LIB), cell(f.SOURCE), cell(f.APPLICATION), cell(f.NB_INGREDIENTS, 'num'),
-              cell(f.PRIX, 'num'), cell(vendue ? 'Oui' : 'Non'), cell(f.TotalVendu, 'num'),
+              cell(f.PRIX, 'num'), cell(dateCourte(f.LAST_MODIFICATION), 'num'), cell(vendue ? 'Oui' : 'Non'), cell(f.TotalVendu, 'num'),
               cell(f.PrixMoyenVendu, 'num'), cell(f.CoutProductionMoyen, 'num'));
     tr.onclick = () => showDetail(f.FORMULE_KEY);
     body.append(tr);
   }
   const from = total ? page * SIZE + 1 : 0, to = Math.min((page + 1) * SIZE, total);
   $('count').textContent = total + ' formule(s) — ' + from + ' à ' + to;
+  document.querySelectorAll('th.sortable').forEach(th => {
+    th.textContent = th.textContent.replace(/ [▲▼]$/, '') + (th.dataset.sort === sort ? (dir === 'asc' ? ' ▲' : ' ▼') : '');
+  });
   $('prev').disabled = page === 0;
   $('next').disabled = (page + 1) * SIZE >= total;
 }
@@ -113,6 +119,7 @@ async function showDetail(key) {
   $('d-title').textContent = (d.formule.FORMULE_CD || '') + ' — ' + (d.formule.FORMULE_LIB || '');
   $('d-meta').textContent = 'Source ' + (d.formule.SOURCE || '?') + ' · poids total ' + (d.formule.POIDS_TOTAL ?? '?')
                           + ' · prix ' + (d.formule.PRIX ?? '?')
+                          + ' · modifiée le ' + (dateCourte(d.formule.LAST_MODIFICATION) || '?')
                           + ' · ' + d.nbIngredients + ' ingrédient(s)'
                           + ' · application ' + (d.formule.APPLICATION || '?')
                           + ' · vendue ' + (Number(d.formule.TotalVendu) > 0 ? 'oui' : 'non')
@@ -136,6 +143,11 @@ async function showDetail(key) {
 $('q').addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => { page = 0; load(); }, 250); });
 $('max').addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => { page = 0; load(); }, 400); });
 $('source').addEventListener('change', () => { page = 0; load(); });
+document.querySelectorAll('th.sortable').forEach(th => th.addEventListener('click', () => {
+  const s = th.dataset.sort;
+  dir = (sort === s && dir === 'asc') ? 'desc' : (sort === s ? 'asc' : (s === 'modif' ? 'desc' : 'asc'));
+  sort = s; page = 0; load();
+}));
 $('prev').onclick = () => { page--; load(); };
 $('next').onclick = () => { page++; load(); };
 api('/api/formules/sources').then(list => { for (const v of list) { const o = document.createElement('option'); o.value = v; o.textContent = v; $('source').append(o); } }).catch(() => {});
