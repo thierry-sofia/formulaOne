@@ -1,6 +1,6 @@
 name: Deploy
 
-# Construit le jar et le deploie sur scentsync.service (127.0.0.1:8091) a chaque
+# Construit le jar et le deploie sur scentsync.service (127.0.0.1:9091) a chaque
 # push sur main, ou a la demande (Actions > Deploy > Run workflow).
 # Meme principe que le deploiement de ParfumIQ / ScentSync.
 #

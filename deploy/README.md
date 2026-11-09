@@ -2,7 +2,9 @@
 
 formulaOne reprend l'installation existante de ScentSync : même service (`scentsync.service`),
 même jar (`/home/ubuntu/scentsync.jar`), même fichier d'environnement (`/home/ubuntu/scentsync.env`),
-même port (`127.0.0.1:8091`). **Nginx, le domaine et le certificat ne changent pas.**
+même port interne (`127.0.0.1:9091`, `FORMULAONE_PORT=9091`). **Nginx, le domaine et le certificat ne changent pas** :
+nginx écoute sur le port 8091 en HTTPS (fichier `explore.aquilegia.pro`) et envoie vers le 9091.
+Adresse : `https://explore.aquilegia.pro:8091`.
 La base SQL Server `maBase` est sur le même VPS (`localhost:1433`).
 
 1. **Utilisateur SQL en lecture seule** sur `maBase` (SELECT sur `dbo.FORMULE` et `dbo.FORMULEDET`).
@@ -20,7 +22,7 @@ La base SQL Server `maBase` est sur le même VPS (`localhost:1433`).
    sinon un push y remettrait l'ancien ScentSync à la place de formulaOne.
 6. **Déployer** : Actions > Deploy > Run workflow (ou push sur `main`).
 
-Vérifier : `curl -I http://127.0.0.1:8091` (401 = l'application répond et demande le mot de passe),
+Vérifier : `curl -I http://127.0.0.1:9091` (401 = l'application répond et demande le mot de passe),
 `sudo journalctl -u scentsync.service -n 50`.
 
 Retour arrière : `sudo cp /home/ubuntu/scentsync.jar.bak /home/ubuntu/scentsync.jar && sudo systemctl restart scentsync.service`
