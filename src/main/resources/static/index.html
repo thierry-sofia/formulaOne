@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>formulaOne</title>
+<style>
+  :root { --bg:#fff; --fg:#1d2433; --muted:#5b6577; --line:#d9dee7; --accent:#2f5bd8; --row:#f4f6fa; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14171f; --fg:#e8ebf2; --muted:#9aa4b8; --line:#2a3040; --accent:#7a9bff; --row:#1b1f2a; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.5 system-ui, sans-serif; }
+  main { max-width: 1000px; margin: 0 auto; padding: 24px 16px; }
+  h1 { font-size: 22px; margin: 0 0 16px; }
+  input { width:100%; padding:10px 12px; font:inherit; color:inherit; background:var(--bg);
+          border:1px solid var(--line); border-radius:8px; }
+  table { width:100%; border-collapse: collapse; margin-top:16px; }
+  th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); }
+  th { color:var(--muted); font-weight:600; font-size:13px; }
+  tbody tr.clickable { cursor:pointer; }
+  tbody tr.clickable:hover { background:var(--row); }
+  td.num, th.num { text-align:right; font-variant-numeric: tabular-nums; }
+  .muted { color:var(--muted); }
+  .bar { display:flex; justify-content:space-between; align-items:center; margin-top:12px; gap:8px; }
+  button { padding:8px 14px; font:inherit; color:inherit; background:var(--row);
+           border:1px solid var(--line); border-radius:8px; cursor:pointer; }
+  button:disabled { opacity:.4; cursor:default; }
+  #detail { margin-top:28px; }
+  .tablewrap { overflow-x:auto; }
+</style>
+</head>
+<body>
+<main>
+  <h1>formulaOne</h1>
+  <input id="q" type="search" placeholder="Rechercher une formule (libellé ou code)" autofocus>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Code</th><th>Libellé</th><th class="num">Poids</th><th class="num">Prix</th><th>Modifiée</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+  <div class="bar">
+    <span id="count" class="muted"></span>
+    <span><button id="prev">Précédent</button> <button id="next">Suivant</button></span>
+  </div>
+
+  <section id="detail" hidden>
+    <h2 id="d-title" style="font-size:18px;margin:0 0 4px"></h2>
+    <p id="d-meta" class="muted" style="margin:0 0 8px"></p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Code matière</th><th>Matière</th><th class="num">Poids</th></tr></thead>
+        <tbody id="lines"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<script>
+const SIZE = 25;
+let page = 0, total = 0, timer = null;
+const $ = id => document.getElementById(id);
+
+function cell(text, cls) {
+  const td = document.createElement('td');
+  if (cls) td.className = cls;
+  td.textContent = text == null ? '' : text;   // textContent : pas d'injection HTML
+  return td;
+}
+
+async function api(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error('Erreur ' + r.status);
+  return r.json();
+}
+
+async function load() {
+  const q = $('q').value.trim();
+  const data = await api('/api/formules?q=' + encodeURIComponent(q) + '&page=' + page + '&size=' + SIZE);
+  total = data.total;
+  const body = $('rows');
+  body.replaceChildren();
+  for (const f of data.items) {
+    const tr = document.createElement('tr');
+    tr.className = 'clickable';
+    tr.append(cell(f.FORMULE_CD), cell(f.FORMULE_LIB), cell(f.POIDS_TOTAL, 'num'),
+              cell(f.PRIX, 'num'), cell(f.LAST_MODIFICATION));
+    tr.onclick = () => showDetail(f.FORMULE_KEY);
+    body.append(tr);
+  }
+  const from = total ? page * SIZE + 1 : 0, to = Math.min((page + 1) * SIZE, total);
+  $('count').textContent = total + ' formule(s) — ' + from + ' à ' + to;
+  $('prev').disabled = page === 0;
+  $('next').disabled = (page + 1) * SIZE >= total;
+}
+
+async function showDetail(key) {
+  const d = await api('/api/formules/' + encodeURIComponent(key));
+  $('d-title').textContent = (d.formule.FORMULE_CD || '') + ' — ' + (d.formule.FORMULE_LIB || '');
+  $('d-meta').textContent = 'Source ' + (d.formule.SOURCE || '?') + ' · poids total ' + (d.formule.POIDS_TOTAL ?? '?')
+                          + ' · prix ' + (d.formule.PRIX ?? '?');
+  const body = $('lines');
+  body.replaceChildren();
+  for (const l of d.lignes) {
+    const tr = document.createElement('tr');
+    tr.append(cell(l.MATIERE_CD), cell(l.MATIERE_LIB), cell(l.FORMULE_POIDS, 'num'));
+    body.append(tr);
+  }
+  $('detail').hidden = false;
+  $('detail').scrollIntoView({ behavior: 'smooth' });
+}
+
+$('q').addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => { page = 0; load(); }, 250); });
+$('prev').onclick = () => { page--; load(); };
+$('next').onclick = () => { page++; load(); };
+load().catch(e => { $('count').textContent = e.message; });
+</script>
+</body>
+</html>
