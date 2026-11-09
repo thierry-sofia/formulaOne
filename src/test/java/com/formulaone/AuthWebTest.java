@@ -7,7 +7,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrlPattern;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.nio.file.Files;
@@ -78,7 +77,7 @@ class AuthWebTest {
     void nonConnecte_api401_pageRedirigeVersLaConnexion() throws Exception {
         mvc.perform(get("/api/me")).andExpect(status().isUnauthorized());
         mvc.perform(get("/api/formules")).andExpect(status().isUnauthorized());
-        mvc.perform(get("/index.html")).andExpect(status().is3xxRedirection()).andExpect(redirectedUrlPattern("**/login.html"));
+        mvc.perform(get("/index.html")).andExpect(status().is3xxRedirection()).andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl("/login.html"));
     }
 
     @Test

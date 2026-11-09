@@ -19,7 +19,6 @@ import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.DelegatingAuthenticationEntryPoint;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
-import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
 import org.springframework.security.web.context.SecurityContextHolderFilter;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy;
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
@@ -78,7 +77,14 @@ public class SecurityConfig {
         LinkedHashMap<RequestMatcher, AuthenticationEntryPoint> parRequete = new LinkedHashMap<>();
         parRequete.put(new AntPathRequestMatcher("/api/**"), new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED));
         DelegatingAuthenticationEntryPoint ep = new DelegatingAuthenticationEntryPoint(parRequete);
-        ep.setDefaultEntryPoint(new LoginUrlAuthenticationEntryPoint("/login.html"));
+        // Redirection RELATIVE (Location: /login.html) : on reste sur l'adresse utilisee par le visiteur. Une adresse
+        // absolue serait reconstruite a partir des en-tetes (Host, X-Forwarded-*) que nginx envoie, et renverrait
+        // vers un autre nom d'hote si ces en-tetes sont ceux d'un autre site.
+        // (ecrite a la main : sendRedirect() la transformerait en adresse absolue)
+        ep.setDefaultEntryPoint((req, res, e) -> {
+            res.setStatus(HttpServletResponse.SC_FOUND);
+            res.setHeader("Location", "/login.html");
+        });
         return ep;
     }
 
