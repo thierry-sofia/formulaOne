@@ -2,6 +2,8 @@ package com.formulaone;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.net.URLDecoder;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -9,6 +11,8 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -37,7 +41,8 @@ public class ComptesService implements UserDetailsService {
     private static final int MDP_MIN = 10;
     private static final int MDP_MAX_OCTETS = 72;   // limite de BCrypt
 
-    public record Compte(String login, String role, boolean compteServeur) { }
+    /** sources : null = toutes les sources, sinon la liste des seules sources autorisees. */
+    public record Compte(String login, String role, boolean compteServeur, List<String> sources) { }
 
     /** Refus de la regle metier (400). */
     public static class RefusException extends RuntimeException {
@@ -49,7 +54,8 @@ public class ComptesService implements UserDetailsService {
         public ConflitException(String message) { super(message); }
     }
 
-    private record Entree(String empreinte, String role) { }
+    /** sources : null = toutes. Ignore pour un administrateur (toujours toutes). */
+    private record Entree(String empreinte, String role, Set<String> sources) { }
 
     private final Path fichier;                       // null ou introuvable : pas de persistance
     private final String loginServeur;
@@ -84,10 +90,14 @@ public class ComptesService implements UserDetailsService {
                 String valeur = egal < 0 ? "" : l.substring(egal + 1).trim();
                 String empreinte = valeur;
                 String role = USER;
-                int pointVirgule = valeur.indexOf(';');
-                if (pointVirgule >= 0) {
-                    empreinte = valeur.substring(0, pointVirgule).trim();
-                    role = valeur.substring(pointVirgule + 1).trim().toUpperCase(Locale.ROOT);
+                Set<String> sources = null;
+                String[] parties = valeur.split(";", -1);
+                if (parties.length > 1) {
+                    empreinte = parties[0].trim();
+                    role = parties[1].trim().toUpperCase(Locale.ROOT);
+                    if (parties.length > 2) {
+                        sources = lireSources(parties[2].trim());
+                    }
                 }
                 if (login.isEmpty() || !empreinte.startsWith("$2")) {
                     throw new IllegalStateException("Fichier des comptes : l'empreinte de « " + login
@@ -96,7 +106,7 @@ public class ComptesService implements UserDetailsService {
                 if (!role.equals(ADMIN) && !role.equals(USER)) {
                     throw new IllegalStateException("Fichier des comptes : role inconnu pour « " + login + " » : " + role);
                 }
-                comptes.put(login, new Entree(empreinte, role));
+                comptes.put(login, new Entree(empreinte, role, sources));
             }
         } catch (IOException e) {
             throw new UncheckedIOException("Lecture du fichier des comptes impossible", e);
@@ -108,8 +118,9 @@ public class ComptesService implements UserDetailsService {
         if (fichier == null) {
             throw new RefusException("Fichier des comptes non configure : modification impossible");
         }
-        StringBuilder sb = new StringBuilder("# Comptes formulaOne (login=empreinte BCrypt;ROLE). Gere par l'ecran d'administration.\n");
-        comptes.forEach((login, e) -> sb.append(login).append('=').append(e.empreinte()).append(';').append(e.role()).append('\n'));
+        StringBuilder sb = new StringBuilder("# Comptes formulaOne (login=empreinte BCrypt;ROLE;SOURCES, * = toutes). Gere par l'ecran d'administration.\n");
+        comptes.forEach((login, e) -> sb.append(login).append('=').append(e.empreinte()).append(';').append(e.role())
+                .append(';').append(ecrireSources(e.sources())).append('\n'));
         try {
             Path dossier = fichier.toAbsolutePath().getParent();
             Path tmp = Files.createTempFile(dossier, ".comptes-", ".tmp");
@@ -148,28 +159,33 @@ public class ComptesService implements UserDetailsService {
     public synchronized List<Compte> liste() {
         List<Compte> r = new ArrayList<>();
         if (!mdpServeur.isBlank()) {
-            r.add(new Compte(loginServeur, ADMIN, true));
+            r.add(new Compte(loginServeur, ADMIN, true, null));
         }
-        comptes.forEach((login, e) -> r.add(new Compte(login, e.role(), false)));
+        comptes.forEach((login, e) -> r.add(new Compte(login, e.role(), false, e.sources() == null ? null : List.copyOf(e.sources()))));
         return r;
     }
 
-    public synchronized Compte creer(String login, String mdp, String role) {
+    public Compte creer(String login, String mdp, String role) {
+        return creer(login, mdp, role, null);
+    }
+
+    public synchronized Compte creer(String login, String mdp, String role, List<String> sources) {
         String l = validerLogin(login);
         validerMdp(mdp);
         String r = validerRole(role);
+        Set<String> src = validerSources(sources);
         if (existe(l)) {
             throw new ConflitException("Ce login existe déjà");
         }
-        comptes.put(l, new Entree(bcrypt.encode(mdp), r));
+        comptes.put(l, new Entree(bcrypt.encode(mdp), r, src));
         persisterOuAnnuler(l, null);
-        return new Compte(l, r, false);
+        return new Compte(l, r, false, src == null ? null : List.copyOf(src));
     }
 
     public synchronized void changerMotDePasse(String login, String mdp) {
         Entree avant = comptesFichier(login);
         validerMdp(mdp);
-        comptes.put(login, new Entree(bcrypt.encode(mdp), avant.role()));
+        comptes.put(login, new Entree(bcrypt.encode(mdp), avant.role(), avant.sources()));
         persisterOuAnnuler(login, avant);
     }
 
@@ -179,8 +195,27 @@ public class ComptesService implements UserDetailsService {
         if (avant.role().equals(ADMIN) && !r.equals(ADMIN) && nbAdministrateurs() <= 1) {
             throw new RefusException("Impossible : ce serait le dernier administrateur");
         }
-        comptes.put(login, new Entree(avant.empreinte(), r));
+        comptes.put(login, new Entree(avant.empreinte(), r, avant.sources()));
         persisterOuAnnuler(login, avant);
+    }
+
+    /** @param sources null = toutes les sources ; sinon au moins une. */
+    public synchronized void changerSources(String login, List<String> sources) {
+        Entree avant = comptesFichier(login);
+        comptes.put(login, new Entree(avant.empreinte(), avant.role(), validerSources(sources)));
+        persisterOuAnnuler(login, avant);
+    }
+
+    /**
+     * Sources que ce compte a le droit de voir : null = toutes (administrateurs et compte du serveur),
+     * sinon l'ensemble des sources autorisees. Un compte inconnu n'a acces a rien (ensemble vide).
+     */
+    public synchronized Set<String> sourcesAutorisees(String login) {
+        Entree e = comptes.get(login);
+        if (e == null) {
+            return (!mdpServeur.isBlank() && login.equals(loginServeur)) ? null : Set.of();
+        }
+        return e.role().equals(ADMIN) ? null : e.sources();
     }
 
     /** @param demandeur login de l'administrateur connecte (il ne peut pas se supprimer lui-meme) */
@@ -250,6 +285,45 @@ public class ComptesService implements UserDetailsService {
         if (mdp.getBytes(StandardCharsets.UTF_8).length > MDP_MAX_OCTETS) {
             throw new RefusException("Mot de passe trop long (72 octets au plus)");
         }
+    }
+
+    private static Set<String> validerSources(List<String> sources) {
+        if (sources == null) {
+            return null;
+        }
+        Set<String> r = new LinkedHashSet<>();
+        for (String s : sources) {
+            String v = s == null ? "" : s.trim();
+            if (v.isEmpty() || v.length() > 50) {
+                throw new RefusException("Source invalide");
+            }
+            r.add(v);
+        }
+        if (r.isEmpty()) {
+            throw new RefusException("Choisir au moins une source, ou « toutes les sources »");
+        }
+        if (r.size() > 50) {
+            throw new RefusException("Trop de sources");
+        }
+        return r;
+    }
+
+    private static Set<String> lireSources(String texte) {
+        if (texte.isEmpty() || texte.equals("*")) {
+            return null;
+        }
+        Set<String> r = new LinkedHashSet<>();
+        for (String p : texte.split(",")) {
+            r.add(URLDecoder.decode(p, StandardCharsets.UTF_8));
+        }
+        return r;
+    }
+
+    private static String ecrireSources(Set<String> sources) {
+        if (sources == null) {
+            return "*";
+        }
+        return String.join(",", sources.stream().map(s -> URLEncoder.encode(s, StandardCharsets.UTF_8)).toList());
     }
 
     private static String validerRole(String role) {

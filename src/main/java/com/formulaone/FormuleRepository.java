@@ -2,6 +2,8 @@ package com.formulaone;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
@@ -33,20 +35,39 @@ public class FormuleRepository {
     }
 
     /** Sources distinctes (liste deroulante), sans les espaces de remplissage des colonnes CHAR. */
-    public List<String> sources() {
-        return jdbc.queryForList("""
-                SELECT DISTINCT RTRIM(SOURCE) FROM dbo.FORMULE WHERE SOURCE IS NOT NULL ORDER BY 1
-                """, String.class);
+    public List<String> sources(Collection<String> autorisees) {
+        List<Object> params = new ArrayList<>();
+        String filtre = clauseSources(autorisees, params);
+        return jdbc.queryForList(
+                "SELECT DISTINCT RTRIM(SOURCE) FROM dbo.FORMULE WHERE SOURCE IS NOT NULL" + filtre + " ORDER BY 1",
+                String.class, params.toArray());
     }
 
-    public long count(String q, String source, int maxLignes) {
+    /**
+     * Restriction aux sources autorisees d'un compte (null = aucune restriction). Les valeurs passent par des
+     * parametres JDBC ; seul le nombre de "?" est ecrit dans le SQL.
+     */
+    private static String clauseSources(Collection<String> autorisees, List<Object> params) {
+        if (autorisees == null) {
+            return "";
+        }
+        if (autorisees.isEmpty()) {
+            return " AND 1 = 0";
+        }
+        params.addAll(autorisees);
+        return " AND RTRIM(SOURCE) IN (" + String.join(",", java.util.Collections.nCopies(autorisees.size(), "?")) + ")";
+    }
+
+    public long count(String q, String source, int maxLignes, Collection<String> autorisees) {
         String like = likePattern(q);
+        List<Object> params = new ArrayList<>(List.of(q, like, like, source, source, maxLignes, maxLignes));
+        String filtre = clauseSources(autorisees, params);
         Long n = jdbc.queryForObject("""
                 SELECT COUNT(*) FROM dbo.FORMULE
                 WHERE (? = '' OR LTRIM(RTRIM(FORMULE_LIB)) LIKE ? ESCAPE '\\' OR RTRIM(FORMULE_CD) LIKE ? ESCAPE '\\')
                   AND (? = '' OR SOURCE = ?)
                   AND (? = 0 OR (SELECT COUNT(*) FROM dbo.FORMULEDET d WHERE d.FORMULE_KEY = dbo.FORMULE.FORMULE_KEY) <= ?)
-                """, Long.class, q, like, like, source, source, maxLignes, maxLignes);
+                """ + filtre, Long.class, params.toArray());
         return n == null ? 0 : n;
     }
 
@@ -57,11 +78,15 @@ public class FormuleRepository {
             "modif", "LAST_MODIFICATION",
             "prix", "PRIX");
 
-    public List<Map<String, Object>> search(String q, String source, int maxLignes, String sort, boolean desc,
-                                            int page, int size) {
+    public List<Map<String, Object>> search(String q, String source, int maxLignes, Collection<String> autorisees,
+                                            String sort, boolean desc, int page, int size) {
         String like = likePattern(q);
         String colonne = TRIS.getOrDefault(sort, TRIS.get("nom"));
         String ordre = colonne + (desc ? " DESC" : " ASC") + ", FORMULE_KEY";
+        List<Object> params = new ArrayList<>(List.of(q, like, like, source, source, maxLignes, maxLignes));
+        String filtre = clauseSources(autorisees, params);
+        params.add(page * size);
+        params.add(size);
         return jdbc.queryForList("""
                 SELECT FORMULE_KEY, RTRIM(SOURCE) AS SOURCE, RTRIM(FORMULE_CD) AS FORMULE_CD,
                        LTRIM(RTRIM(FORMULE_LIB)) AS FORMULE_LIB, POIDS_TOTAL, PRIX, LAST_MODIFICATION,
@@ -71,9 +96,10 @@ public class FormuleRepository {
                 WHERE (? = '' OR LTRIM(RTRIM(FORMULE_LIB)) LIKE ? ESCAPE '\\' OR RTRIM(FORMULE_CD) LIKE ? ESCAPE '\\')
                   AND (? = '' OR SOURCE = ?)
                   AND (? = 0 OR (SELECT COUNT(*) FROM dbo.FORMULEDET d WHERE d.FORMULE_KEY = dbo.FORMULE.FORMULE_KEY) <= ?)
+                %s
                 ORDER BY %s
                 OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
-                """.formatted(ordre), q, like, like, source, source, maxLignes, maxLignes, page * size, size);
+                """.formatted(filtre, ordre), params.toArray());
     }
 
     public List<Map<String, Object>> findByKey(String key) {

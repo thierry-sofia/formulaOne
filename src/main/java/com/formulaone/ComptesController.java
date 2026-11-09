@@ -19,7 +19,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class ComptesController {
 
-    public record NouveauCompte(String login, String password, String role) { }
+    public record NouveauCompte(String login, String password, String role, List<String> sources) { }
+    public record Sources(List<String> sources) { }
     public record MotDePasse(String password) { }
     public record Role(String role) { }
 
@@ -43,7 +44,7 @@ public class ComptesController {
 
     @PostMapping("/api/admin/comptes")
     public ResponseEntity<ComptesService.Compte> creer(@RequestBody NouveauCompte c) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(comptes.creer(c.login(), c.password(), c.role()));
+        return ResponseEntity.status(HttpStatus.CREATED).body(comptes.creer(c.login(), c.password(), c.role(), c.sources()));
     }
 
     @PutMapping("/api/admin/comptes/{login}/password")
@@ -56,6 +57,13 @@ public class ComptesController {
     public Map<String, String> role(@PathVariable String login, @RequestBody Role r) {
         comptes.changerRole(login, r.role());
         return Map.of("message", "Rôle modifié");
+    }
+
+    /** Sources autorisees : liste, ou null pour toutes les sources. */
+    @PutMapping("/api/admin/comptes/{login}/sources")
+    public Map<String, String> sources(@PathVariable String login, @RequestBody Sources s) {
+        comptes.changerSources(login, s.sources());
+        return Map.of("message", "Sources modifiées");
     }
 
     @DeleteMapping("/api/admin/comptes/{login}")

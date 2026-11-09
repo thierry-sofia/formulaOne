@@ -40,10 +40,15 @@ sans redémarrage.
   dans la liste mais ne se modifie que dans `scentsync.env`. Il garantit qu'il y a toujours un administrateur.
 - **Règles** : login de 3 à 50 caractères (lettres, chiffres, `. _ @ -`), mot de passe de 10 caractères au moins,
   pas de doublon (majuscules ignorées), on ne supprime pas son propre compte, on ne retire pas le dernier administrateur.
+- **Sources autorisées** : pour chaque utilisateur, « Toutes les sources » (par défaut, y compris pour les comptes
+  existants) ou une liste de sources. La restriction est appliquée **côté serveur** : liste, recherche, filtre
+  par source, détail d'une formule et export CSV (une formule d'une source interdite répond « introuvable »).
+  Un administrateur voit toujours tout. Le bouton « Sources » de chaque ligne modifie le choix, à effet immédiat.
 - Mots de passe stockés uniquement sous forme d'empreinte BCrypt (jamais en clair, jamais dans les journaux).
 - Le dossier `/home/ubuntu` doit être inscriptible par l'utilisateur du service (c'est le cas : `User=ubuntu`).
 
-**Sans l'écran (dépannage)** : le fichier est lisible, une ligne par compte `login=empreinte;ROLE` (`ROLE` = `ADMIN`
-ou `USER`, `USER` si absent). Une empreinte : `java -jar /home/ubuntu/scentsync.jar hash`. Redémarrer le service après
+**Sans l'écran (dépannage)** : le fichier est lisible, une ligne par compte `login=empreinte;ROLE;SOURCES` (`ROLE` = `ADMIN`
+ou `USER`, `USER` si absent ; `SOURCES` = `*` pour toutes, ou les sources séparées par des virgules, chacune encodée
+comme dans une URL, `*` si absent). Une empreinte : `java -jar /home/ubuntu/scentsync.jar hash`. Redémarrer le service après
 une modification à la main. Une ligne invalide empêche l'application de démarrer
 (`sudo journalctl -u scentsync.service -n 30`). Autre chemin : variable `FORMULAONE_USERS_FILE`.

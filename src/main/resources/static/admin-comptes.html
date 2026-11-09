@@ -28,6 +28,11 @@
   .muted { color:var(--muted); }
   #msg { min-height:1.4em; margin:12px 0; font-weight:600; }
   #msg.err { color:var(--err); } #msg.ok { color:var(--ok); }
+  .src { border:1px solid var(--line); border-radius:8px; padding:8px 10px; display:flex; flex-direction:column; gap:4px; }
+  .src label { flex-direction:row; align-items:center; gap:6px; color:var(--fg); font-size:14px; }
+  .src .liste { display:flex; flex-wrap:wrap; gap:4px 14px; margin-left:22px; }
+  .src .liste.off { opacity:.45; }
+  .full { grid-column: 1 / -1; }
   dialog { background:var(--bg); color:var(--fg); border:1px solid var(--line); border-radius:12px; padding:20px; max-width:360px; width:90%; }
   dialog::backdrop { background:rgba(0,0,0,.45); }
   dialog form { display:flex; flex-direction:column; gap:10px; }
@@ -41,7 +46,7 @@
 
   <div class="tablewrap">
     <table>
-      <thead><tr><th>Login</th><th>Rôle</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Login</th><th>Rôle</th><th>Sources autorisées</th><th>Actions</th></tr></thead>
       <tbody id="rows"></tbody>
     </table>
   </div>
@@ -53,8 +58,18 @@
     <label>Rôle
       <select id="n-role"><option value="USER">Utilisateur (lecture)</option><option value="ADMIN">Administrateur</option></select>
     </label>
+    <div class="full"><span class="muted" style="font-size:13px">Sources autorisées (inutile pour un administrateur : il voit tout)</span>
+      <div id="n-src" class="src"></div></div>
     <button type="submit">Créer le compte</button>
   </form>
+
+  <dialog id="dlg-src">
+    <form method="dialog">
+      <strong id="dlg-src-titre"></strong>
+      <div id="e-src" class="src"></div>
+      <div class="actions"><button value="ok">Enregistrer</button><button value="cancel" formnovalidate>Annuler</button></div>
+    </form>
+  </dialog>
 
   <dialog id="dlg">
     <form method="dialog" id="dlg-form">
@@ -69,6 +84,34 @@
 const $ = id => document.getElementById(id);
 const HEADERS = { 'Content-Type': 'application/json', 'X-Requested-With': 'formulaone' };
 let moi = '';
+let toutesLesSources = [];
+
+/** Selecteur de sources : « toutes » ou une liste cochee. Renvoie une fonction qui lit le choix (null = toutes). */
+function widgetSources(conteneur, choisies) {
+  conteneur.replaceChildren();
+  const restreint = Array.isArray(choisies);
+  const radio = (valeur, texte, coche) => {
+    const l = document.createElement('label');
+    const r = document.createElement('input');
+    r.type = 'radio'; r.name = 'mode-' + conteneur.id; r.value = valeur; r.checked = coche;
+    l.append(r, document.createTextNode(texte));
+    return [l, r];
+  };
+  const [lTous, rTous] = radio('tous', 'Toutes les sources', !restreint);
+  const [lSeul, rSeul] = radio('liste', 'Seulement :', restreint);
+  const liste = document.createElement('div'); liste.className = 'liste';
+  const cases = toutesLesSources.map(s => {
+    const l = document.createElement('label');
+    const c = document.createElement('input'); c.type = 'checkbox'; c.value = s; c.checked = restreint && choisies.includes(s);
+    l.append(c, document.createTextNode(s));
+    liste.append(l);
+    return c;
+  });
+  const maj = () => liste.classList.toggle('off', rTous.checked);
+  rTous.onchange = rSeul.onchange = maj; maj();
+  conteneur.append(lTous, lSeul, liste);
+  return () => rTous.checked ? null : cases.filter(c => c.checked).map(c => c.value);
+}
 
 function message(texte, ok) { const m = $('msg'); m.textContent = texte; m.className = ok ? 'ok' : 'err'; }
 
@@ -95,6 +138,8 @@ async function charger() {
     const tr = document.createElement('tr');
     const tdLogin = document.createElement('td'); tdLogin.textContent = c.login;
     const tdRole = document.createElement('td'); tdRole.textContent = c.role === 'ADMIN' ? 'Administrateur' : 'Utilisateur';
+    const tdSrc = document.createElement('td');
+    tdSrc.textContent = c.role === 'ADMIN' ? 'Toutes (administrateur)' : (c.sources ? c.sources.join(', ') : 'Toutes');
     const tdAct = document.createElement('td'); tdAct.className = 'actions';
     if (c.compteServeur) {
       const note = document.createElement('span'); note.className = 'muted';
@@ -103,10 +148,11 @@ async function charger() {
     } else {
       tdAct.append(
         bouton('Mot de passe', '', () => changerMotDePasse(c.login)),
+        ...(c.role === 'ADMIN' ? [] : [bouton('Sources', '', () => changerSources(c))]),
         bouton(c.role === 'ADMIN' ? 'Passer utilisateur' : 'Passer administrateur', '', () => changerRole(c.login, c.role === 'ADMIN' ? 'USER' : 'ADMIN')),
         bouton('Supprimer', 'danger', () => supprimer(c.login)));
     }
-    tr.append(tdLogin, tdRole, tdAct);
+    tr.append(tdLogin, tdRole, tdSrc, tdAct);
     body.append(tr);
   }
 }
@@ -121,6 +167,19 @@ const enc = encodeURIComponent;
 function supprimer(login) {
   if (!confirm('Supprimer le compte « ' + login + ' » ?')) return;
   agir(appel('/api/admin/comptes/' + enc(login), { method: 'DELETE', headers: HEADERS }), 'Compte supprimé');
+}
+
+function changerSources(c) {
+  $('dlg-src-titre').textContent = 'Sources autorisées de « ' + c.login + ' »';
+  const lire = widgetSources($('e-src'), c.sources);
+  $('dlg-src').returnValue = '';
+  $('dlg-src').showModal();
+  $('dlg-src').onclose = () => {
+    if ($('dlg-src').returnValue !== 'ok') return;
+    const sources = lire();
+    if (sources !== null && sources.length === 0) { message('Choisir au moins une source, ou « toutes les sources »', false); return; }
+    agir(appel('/api/admin/comptes/' + enc(c.login) + '/sources', { method: 'PUT', headers: HEADERS, body: JSON.stringify({ sources }) }), 'Sources modifiées');
+  };
 }
 
 function changerRole(login, role) {
@@ -142,12 +201,19 @@ function changerMotDePasse(login) {
 
 $('creer').addEventListener('submit', e => {
   e.preventDefault();
-  const corps = JSON.stringify({ login: $('n-login').value.trim(), password: $('n-mdp').value, role: $('n-role').value });
+  const sources = lireSourcesCreation();
+  if ($('n-role').value !== 'ADMIN' && sources !== null && sources.length === 0) {
+    message('Choisir au moins une source, ou « toutes les sources »', false); return;
+  }
+  const corps = JSON.stringify({ login: $('n-login').value.trim(), password: $('n-mdp').value, role: $('n-role').value, sources });
   agir(appel('/api/admin/comptes', { method: 'POST', headers: HEADERS, body: corps }).then(() => {
     $('n-login').value = ''; $('n-mdp').value = '';
+    lireSourcesCreation = widgetSources($('n-src'), null);
   }), 'Compte créé');
 });
 
+let lireSourcesCreation = () => null;
+appel('/api/formules/sources').then(l => { toutesLesSources = l; lireSourcesCreation = widgetSources($('n-src'), null); }).catch(() => {});
 appel('/api/me').then(m => { moi = m.login; $('moi').textContent = m.login; }).catch(() => {});
 charger().catch(e => message(e.message, false));
 </script>

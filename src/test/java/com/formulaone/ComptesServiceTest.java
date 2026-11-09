@@ -9,6 +9,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.List;
+import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -52,7 +53,7 @@ class ComptesServiceTest {
         ComptesService s = service(dir);
         s.creer("alice", "motdepasse-1", "USER");
         List<ComptesService.Compte> l = s.liste();
-        assertEquals(new ComptesService.Compte("admin", "ADMIN", true), l.get(0));
+        assertEquals(new ComptesService.Compte("admin", "ADMIN", true, null), l.get(0));
         assertEquals("alice", l.get(1).login());
         UserDetails admin = s.loadUserByUsername("admin");
         assertTrue(admin.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN")));
@@ -147,5 +148,48 @@ class ComptesServiceTest {
         assertThrows(IllegalStateException.class, () -> new ComptesService(dir.resolve("u.properties"), "admin", "x"));
         Files.writeString(dir.resolve("u2.properties"), "bob=$2a$10$abcdefghijklmnopqrstuv;ROOT\n");
         assertThrows(IllegalStateException.class, () -> new ComptesService(dir.resolve("u2.properties"), "admin", "x"));
+    }
+
+    @Test
+    void sourcesAutoriseesParCompte(@TempDir Path dir) {
+        ComptesService s = service(dir);
+        s.creer("alice", "motdepasse-1", "USER", List.of("BIS", "CONCEPT"));
+        s.creer("bob", "motdepasse-1", "USER");                    // sans restriction
+        s.creer("carl", "motdepasse-1", "ADMIN", List.of("BIS"));   // un administrateur voit tout
+
+        assertEquals(Set.of("BIS", "CONCEPT"), s.sourcesAutorisees("alice"));
+        assertEquals(null, s.sourcesAutorisees("bob"));
+        assertEquals(null, s.sourcesAutorisees("carl"));
+        assertEquals(null, s.sourcesAutorisees("admin"), "compte du serveur : tout");
+        assertEquals(Set.of(), s.sourcesAutorisees("inconnu"), "compte inconnu : rien");
+
+        // persiste et se relit, y compris les noms avec espaces ou caracteres speciaux
+        s.changerSources("bob", List.of("Mes formules;2024", "a,b"));
+        ComptesService relu = service(dir);
+        assertEquals(Set.of("BIS", "CONCEPT"), relu.sourcesAutorisees("alice"));
+        assertEquals(Set.of("Mes formules;2024", "a,b"), relu.sourcesAutorisees("bob"));
+        s.changerSources("bob", null);
+        assertEquals(null, service(dir).sourcesAutorisees("bob"));
+    }
+
+    @Test
+    void sourcesInvalidesRefusees(@TempDir Path dir) {
+        ComptesService s = service(dir);
+        assertThrows(RefusException.class, () -> s.creer("alice", "motdepasse-1", "USER", List.of()));
+        assertThrows(RefusException.class, () -> s.creer("alice", "motdepasse-1", "USER", List.of(" ")));
+        assertThrows(RefusException.class, () -> s.creer("alice", "motdepasse-1", "USER", List.of("x".repeat(51))));
+        s.creer("alice", "motdepasse-1", "USER", List.of("BIS"));
+        assertThrows(RefusException.class, () -> s.changerSources("alice", List.of()));
+        assertThrows(RefusException.class, () -> s.changerSources("admin", List.of("BIS")));
+        assertEquals(Set.of("BIS"), s.sourcesAutorisees("alice"), "rien n'a change");
+    }
+
+    @Test
+    void ancienFichierSansSourcesGardeToutesLesSources(@TempDir Path dir) throws Exception {
+        String hash = new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder().encode("motdepasse-1");
+        Files.writeString(dir.resolve("u.properties"), "vieux=" + hash + "\nmoyen=" + hash + ";USER\n");
+        ComptesService s = new ComptesService(dir.resolve("u.properties"), "admin", "x");
+        assertEquals(null, s.sourcesAutorisees("vieux"));
+        assertEquals(null, s.sourcesAutorisees("moyen"));
     }
 }

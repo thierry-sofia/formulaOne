@@ -5,11 +5,13 @@ import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -24,15 +26,36 @@ public class FormuleController {
     private static final int MAX_SIZE = 100;
 
     private final FormuleRepository repo;
+    private final ComptesService comptes;
 
-    public FormuleController(FormuleRepository repo) {
+    public FormuleController(FormuleRepository repo, ComptesService comptes) {
         this.repo = repo;
+        this.comptes = comptes;
+    }
+
+    /** Sources que le compte connecte peut voir : null = toutes. */
+    private Set<String> autorisees(Authentication auth) {
+        return comptes.sourcesAutorisees(auth.getName());
+    }
+
+    /** Une formule d'une source interdite est traitee comme inexistante (404) : on ne revele rien. */
+    private Map<String, Object> formuleAutorisee(String key, Authentication auth) {
+        List<Map<String, Object>> found = repo.findByKey(key);
+        if (found.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Formule introuvable");
+        }
+        Set<String> ok = autorisees(auth);
+        Object source = found.get(0).get("SOURCE");
+        if (ok != null && (source == null || !ok.contains(source.toString().trim()))) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Formule introuvable");
+        }
+        return found.get(0);
     }
 
     /** Sources disponibles (liste deroulante de la recherche). */
     @GetMapping("/sources")
-    public List<String> sources() {
-        return repo.sources();
+    public List<String> sources(Authentication auth) {
+        return repo.sources(autorisees(auth));
     }
 
     /** Recherche paginee par libelle ou code de formule, filtree par source si elle est donnee. */
@@ -43,7 +66,8 @@ public class FormuleController {
                                       @RequestParam(defaultValue = "nom") String sort,
                                       @RequestParam(defaultValue = "asc") String dir,
                                       @RequestParam(defaultValue = "0") int page,
-                                      @RequestParam(defaultValue = "25") int size) {
+                                      @RequestParam(defaultValue = "25") int size,
+                                      Authentication auth) {
         String term = q.trim();
         if (term.length() > 100) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Recherche trop longue");
@@ -56,22 +80,19 @@ public class FormuleController {
         int safeSize = Math.min(Math.max(size, 1), MAX_SIZE);
 
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("total", repo.count(term, src, Math.max(maxLignes, 0)));
+        result.put("total", repo.count(term, src, Math.max(maxLignes, 0), autorisees(auth)));
         result.put("page", safePage);
         result.put("size", safeSize);
-        result.put("items", repo.search(term, src, Math.max(maxLignes, 0), sort, "desc".equalsIgnoreCase(dir), safePage, safeSize));
+        result.put("items", repo.search(term, src, Math.max(maxLignes, 0), autorisees(auth), sort, "desc".equalsIgnoreCase(dir), safePage, safeSize));
         return result;
     }
 
     /** Detail d'une formule : en-tete et composition. */
     @GetMapping("/{key}")
-    public Map<String, Object> detail(@PathVariable String key) {
-        List<Map<String, Object>> found = repo.findByKey(key);
-        if (found.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Formule introuvable");
-        }
+    public Map<String, Object> detail(@PathVariable String key, Authentication auth) {
+        Map<String, Object> formule = formuleAutorisee(key, auth);
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("formule", found.get(0));
+        result.put("formule", formule);
         List<Map<String, Object>> lignes = repo.lines(key);
         result.put("lignes", lignes);
         result.put("nbIngredients", lignes.size());
@@ -81,12 +102,8 @@ public class FormuleController {
 
     /** Formule au format CSV (separateur ';', UTF-8 avec BOM : s'ouvre directement dans Excel en francais). */
     @GetMapping("/{key}/csv")
-    public ResponseEntity<byte[]> csv(@PathVariable String key) {
-        List<Map<String, Object>> found = repo.findByKey(key);
-        if (found.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Formule introuvable");
-        }
-        Map<String, Object> f = found.get(0);
+    public ResponseEntity<byte[]> csv(@PathVariable String key, Authentication auth) {
+        Map<String, Object> f = formuleAutorisee(key, auth);
         String cd = text(f.get("FORMULE_CD"));
         String lib = text(f.get("FORMULE_LIB"));
 
