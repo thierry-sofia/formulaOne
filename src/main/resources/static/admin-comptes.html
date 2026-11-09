@@ -41,7 +41,8 @@
 <body>
 <main>
   <h1>Comptes</h1>
-  <p class="muted" style="margin:0"><a href="/">← Retour aux formules</a> · connecté : <strong id="moi"></strong></p>
+  <p class="muted" style="margin:0"><a href="/">← Retour aux formules</a> · connecté : <strong id="moi"></strong>
+    <button id="logout" type="button" style="padding:3px 10px;font-size:13px;margin-left:8px">Se déconnecter</button></p>
   <div id="msg" role="status"></div>
 
   <div class="tablewrap">
@@ -117,6 +118,7 @@ function message(texte, ok) { const m = $('msg'); m.textContent = texte; m.class
 
 async function appel(url, options) {
   const r = await fetch(url, options);
+  if (r.status === 401) { location.replace('/login.html'); throw new Error('Session expirée'); }
   let corps = null;
   try { corps = await r.json(); } catch (e) { /* corps vide */ }
   if (!r.ok) throw new Error((corps && corps.message) || ('Erreur ' + r.status));
@@ -212,6 +214,10 @@ $('creer').addEventListener('submit', e => {
   }), 'Compte créé');
 });
 
+$('logout').onclick = async () => {
+  try { await fetch('/api/logout', { method: 'POST', headers: { 'X-Requested-With': 'formulaone' } }); } catch (e) { /* on quitte quand meme */ }
+  location.replace('/login.html');
+};
 let lireSourcesCreation = () => null;
 appel('/api/formules/sources').then(l => { toutesLesSources = l; lireSourcesCreation = widgetSources($('n-src'), null); }).catch(() => {});
 appel('/api/me').then(m => { moi = m.login; $('moi').textContent = m.login; }).catch(() => {});

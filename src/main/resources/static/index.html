@@ -38,6 +38,7 @@
 <body>
 <main>
   <h1>formulaOne <a id="lien-comptes" href="/admin-comptes.html" hidden style="font-size:13px;font-weight:400;margin-left:12px">Comptes</a></h1>
+  <p class="muted" style="margin:-8px 0 12px;font-size:13px"><span id="moi"></span> <button id="logout" type="button" style="padding:3px 10px;font-size:13px">Se déconnecter</button></p>
   <div class="filters">
     <select id="source" aria-label="Source"><option value="">Toutes les sources</option></select>
     <input id="q" type="search" placeholder="Nom ou code (jokers SQL : toto% = commence par toto, %toto, t_to)" autofocus>
@@ -85,6 +86,7 @@ function cell(text, cls) {
 
 async function api(url) {
   const r = await fetch(url);
+  if (r.status === 401) { location.replace('/login.html'); throw new Error('Session expirée'); }   // session fermee ou expiree
   if (!r.ok) throw new Error('Erreur ' + r.status);
   return r.json();
 }
@@ -150,7 +152,11 @@ document.querySelectorAll('th.sortable').forEach(th => th.addEventListener('clic
 }));
 $('prev').onclick = () => { page--; load(); };
 $('next').onclick = () => { page++; load(); };
-api('/api/me').then(m => { if (m.admin) $('lien-comptes').hidden = false; }).catch(() => {});
+api('/api/me').then(m => { $('moi').textContent = m.login; if (m.admin) $('lien-comptes').hidden = false; }).catch(() => {});
+$('logout').onclick = async () => {
+  try { await fetch('/api/logout', { method: 'POST', headers: { 'X-Requested-With': 'formulaone' } }); } catch (e) { /* on quitte quand meme */ }
+  location.replace('/login.html');
+};
 api('/api/formules/sources').then(list => { for (const v of list) { const o = document.createElement('option'); o.value = v; o.textContent = v; $('source').append(o); } }).catch(() => {});
 load().catch(e => { $('count').textContent = e.message; });
 </script>

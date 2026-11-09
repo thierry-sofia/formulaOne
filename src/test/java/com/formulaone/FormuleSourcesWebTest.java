@@ -7,7 +7,6 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -35,8 +34,8 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
 /** Les restrictions de sources sont appliquees cote serveur : liste, recherche, detail, CSV. */
-@WebMvcTest(FormuleController.class)
-@Import({SecurityConfig.class})
+@WebMvcTest(controllers = {FormuleController.class, AuthController.class})
+@Import({SecurityConfig.class, LoginThrottle.class})
 class FormuleSourcesWebTest {
 
     static Path fichier;
@@ -74,7 +73,7 @@ class FormuleSourcesWebTest {
     @Test
     @SuppressWarnings("unchecked")
     void rechercheRestreinteAuxSourcesDuCompte() throws Exception {
-        mvc.perform(get("/api/formules?q=a&source=CONCEPT").with(httpBasic("alice", "motdepasse-1"))).andExpect(status().isOk());
+        mvc.perform(get("/api/formules?q=a&source=CONCEPT").session(TestAuth.connecter(mvc, "alice", "motdepasse-1"))).andExpect(status().isOk());
 
         ArgumentCaptor<java.util.Collection<String>> captor = ArgumentCaptor.forClass(java.util.Collection.class);
         verify(repo).search(eq("a"), eq("CONCEPT"), anyInt(), captor.capture(), anyString(), anyBoolean(), anyInt(), anyInt());
@@ -85,8 +84,8 @@ class FormuleSourcesWebTest {
     @Test
     @SuppressWarnings("unchecked")
     void compteSansRestrictionEtAdministrateurVoientTout() throws Exception {
-        mvc.perform(get("/api/formules").with(httpBasic("bob", "motdepasse-1"))).andExpect(status().isOk());
-        mvc.perform(get("/api/formules").with(httpBasic("admin", "mdpServeur1"))).andExpect(status().isOk());
+        mvc.perform(get("/api/formules").session(TestAuth.connecter(mvc, "bob", "motdepasse-1"))).andExpect(status().isOk());
+        mvc.perform(get("/api/formules").session(TestAuth.connecter(mvc, "admin", "mdpServeur1"))).andExpect(status().isOk());
         ArgumentCaptor<java.util.Collection<String>> captor = ArgumentCaptor.forClass(java.util.Collection.class);
         verify(repo, org.mockito.Mockito.times(2)).search(anyString(), anyString(), anyInt(), captor.capture(), anyString(), anyBoolean(), anyInt(), anyInt());
         captor.getAllValues().forEach(v -> org.junit.jupiter.api.Assertions.assertNull(v));
@@ -94,19 +93,19 @@ class FormuleSourcesWebTest {
 
     @Test
     void detailEtCsvDUneSourceInterditeSont404() throws Exception {
-        var alice = httpBasic("alice", "motdepasse-1");
-        mvc.perform(get("/api/formules/K1").with(alice)).andExpect(status().isOk());
-        mvc.perform(get("/api/formules/K2").with(alice)).andExpect(status().isNotFound());
-        mvc.perform(get("/api/formules/K1/csv").with(alice)).andExpect(status().isOk());
-        mvc.perform(get("/api/formules/K2/csv").with(alice)).andExpect(status().isNotFound());
+        var alice = TestAuth.connecter(mvc, "alice", "motdepasse-1");
+        mvc.perform(get("/api/formules/K1").session(alice)).andExpect(status().isOk());
+        mvc.perform(get("/api/formules/K2").session(alice)).andExpect(status().isNotFound());
+        mvc.perform(get("/api/formules/K1/csv").session(alice)).andExpect(status().isOk());
+        mvc.perform(get("/api/formules/K2/csv").session(alice)).andExpect(status().isNotFound());
         // un compte sans restriction voit K2
-        mvc.perform(get("/api/formules/K2").with(httpBasic("bob", "motdepasse-1"))).andExpect(status().isOk());
+        mvc.perform(get("/api/formules/K2").session(TestAuth.connecter(mvc, "bob", "motdepasse-1"))).andExpect(status().isOk());
     }
 
     @Test
     void listeDesSourcesRestreinte() throws Exception {
         when(repo.sources(any())).thenReturn(List.of("BIS"));
-        mvc.perform(get("/api/formules/sources").with(httpBasic("alice", "motdepasse-1"))).andExpect(status().isOk());
+        mvc.perform(get("/api/formules/sources").session(TestAuth.connecter(mvc, "alice", "motdepasse-1"))).andExpect(status().isOk());
         verify(repo).sources(Set.of("BIS"));
     }
 }

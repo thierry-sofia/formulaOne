@@ -154,6 +154,18 @@ public class ComptesService implements UserDetailsService {
         throw new UsernameNotFoundException("Compte inconnu");
     }
 
+    /**
+     * Empreinte de l'etat du compte (mot de passe + role) : une session ouverte avant une modification du compte
+     * est invalidee a la requete suivante. null = le compte n'existe plus.
+     */
+    public synchronized String signature(String login) {
+        Entree e = comptes.get(login);
+        if (e != null) {
+            return e.empreinte() + "|" + e.role();
+        }
+        return (!mdpServeur.isBlank() && login.equals(loginServeur)) ? "serveur" : null;
+    }
+
     // ---------- administration ----------
 
     public synchronized List<Compte> liste() {

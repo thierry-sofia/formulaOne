@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>formulaOne — Connexion</title>
+<style>
+  :root { --bg:#fff; --fg:#1d2433; --muted:#5b6577; --line:#d9dee7; --accent:#2f5bd8; --err:#b3261e; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14171f; --fg:#e8ebf2; --muted:#9aa4b8; --line:#2a3040; --accent:#7a9bff; --err:#ff8a80; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center; background:var(--bg); color:var(--fg); font:15px/1.5 system-ui, sans-serif; }
+  form { width:100%; max-width:340px; padding:24px 16px; display:flex; flex-direction:column; gap:12px; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  label { display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--muted); }
+  input { padding:10px 12px; font:inherit; color:var(--fg); background:var(--bg); border:1px solid var(--line); border-radius:8px; }
+  button { padding:10px 14px; font:inherit; font-weight:600; color:#fff; background:var(--accent); border:0; border-radius:8px; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:default; }
+  #msg { min-height:1.4em; color:var(--err); font-weight:600; }
+  .muted { color:var(--muted); font-size:13px; margin:0; }
+</style>
+</head>
+<body>
+<form id="f" autocomplete="on">
+  <h1>formulaOne</h1>
+  <label>Identifiant <input id="login" name="username" autocomplete="username" required maxlength="50" autofocus></label>
+  <label>Mot de passe <input id="mdp" name="password" type="password" autocomplete="current-password" required maxlength="200"></label>
+  <div id="msg" role="alert"></div>
+  <button id="ok" type="submit">Se connecter</button>
+  <p class="muted">La session se ferme après 30 minutes d'inactivité.</p>
+</form>
+<script>
+const $ = id => document.getElementById(id);
+$('f').addEventListener('submit', async e => {
+  e.preventDefault();
+  $('ok').disabled = true; $('msg').textContent = '';
+  try {
+    const r = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'formulaone' },
+      body: JSON.stringify({ login: $('login').value.trim(), password: $('mdp').value })
+    });
+    if (r.ok) { location.replace('/'); return; }
+    let corps = null; try { corps = await r.json(); } catch (x) { /* corps vide */ }
+    $('msg').textContent = (corps && corps.message) || ('Erreur ' + r.status);
+    $('mdp').value = ''; $('mdp').focus();
+  } catch (x) {
+    $('msg').textContent = 'Connexion impossible, réessayez.';
+  }
+  $('ok').disabled = false;
+});
+</script>
+</body>
+</html>

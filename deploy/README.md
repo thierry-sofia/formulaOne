@@ -22,11 +22,30 @@ La base SQL Server `maBase` est sur le même VPS (`localhost:1433`).
    sinon un push y remettrait l'ancien ScentSync à la place de formulaOne.
 6. **Déployer** : Actions > Deploy > Run workflow (ou push sur `main`).
 
-Vérifier : `curl -I http://127.0.0.1:9091` (401 = l'application répond et demande le mot de passe),
+Vérifier : `curl -I http://127.0.0.1:9091/login.html` (200 = l'application répond ; `curl -I http://127.0.0.1:9091/api/me` doit répondre 401),
 `sudo journalctl -u scentsync.service -n 50`.
 
 Retour arrière : `sudo cp /home/ubuntu/scentsync.jar.bak /home/ubuntu/scentsync.jar && sudo systemctl restart scentsync.service`
 (l'ancien ScentSync n'est restauré qu'avec son ancien fichier `scentsync.env.ancien`).
+
+## Connexion, sessions et sécurité
+
+- **Page de connexion** `login.html` et bouton **Se déconnecter** (en haut de chaque page). Plus de fenêtre
+  d'authentification du navigateur : l'authentification HTTP Basic est supprimée (elle aurait permis d'essayer des mots de passe sans limite).
+- **Session** : cookie `JSESSIONID` `HttpOnly`, `Secure`, `SameSite=Strict`. **30 minutes d'inactivité**, et 12 heures au
+  maximum quoi qu'il arrive. Le redémarrage du service ferme toutes les sessions.
+- **Session coupée aussitôt** quand le compte est supprimé, que son mot de passe change ou que son rôle change.
+- **Frein aux essais** : 10 échecs depuis une même adresse IP, ou 20 sur un même identifiant, en 15 minutes =
+  blocage de 15 minutes (même avec le bon mot de passe). Les échecs sont journalisés (`[auth]`) sans mot de passe.
+- Message d'erreur identique pour un identifiant inconnu et un mauvais mot de passe.
+- En-têtes : CSP stricte, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `nosniff`. Les requêtes qui
+  modifient exigent un en-tête de contrôle (protection contre les requêtes venant d'un autre site).
+- **Le cookie `Secure` exige HTTPS** : se connecter par `https://explore.aquilegia.pro:8091`, pas en `http://`.
+
+**Adresse IP réelle (nginx)** : le frein aux essais par adresse IP lit `X-Forwarded-For`. Le bloc nginx du port 8091 doit contenir
+`proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;` et `proxy_set_header X-Forwarded-Proto $scheme;`.
+Sans eux, tous les visiteurs auraient l'adresse 127.0.0.1 et 10 échecs de n'importe qui bloqueraient tout le monde 15 minutes.
+Vérifier : `sudo journalctl -u scentsync.service | grep "\[auth\]"` doit montrer des `ip=` différents de `127.0.0.1`.
 
 ## Comptes utilisateurs (login / mot de passe)
 
