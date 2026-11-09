@@ -47,6 +47,22 @@ Retour arrière : `sudo cp /home/ubuntu/scentsync.jar.bak /home/ubuntu/scentsync
 Sans eux, tous les visiteurs auraient l'adresse 127.0.0.1 et 10 échecs de n'importe qui bloqueraient tout le monde 15 minutes.
 Vérifier : `sudo journalctl -u scentsync.service | grep "\[auth\]"` doit montrer des `ip=` différents de `127.0.0.1`.
 
+## Numéros CAS dans l'écran de détail et l'export CSV
+
+Le CAS n'est pas dans `maBase` : formulaOne le lit dans un **fichier d'extraction du Kardex**,
+`/home/ubuntu/formulaone-cas.tsv` (autre chemin : variable `FORMULAONE_CAS_FILE`).
+
+- **Format** : une ligne par matière, colonnes séparées par des **tabulations** (ou des `;`), comme dans le Kardex :
+  `code ; libellé ; type ; CAS ; coût ; naturelle`. Le code est la 1re colonne, le CAS la 4e. Une 1re ligne d'en-tête
+  contenant une colonne « CAS » est acceptée (c'est alors cette colonne qui est lue).
+- **Mise en place** : coller la liste du Kardex dans le fichier (`nano /home/ubuntu/formulaone-cas.tsv`). Le fichier est
+  **relu tout seul** quand il change, sans redémarrage. Les journaux disent `[cas] N matières lues`.
+- **Résultat** : colonne **CAS** dans le détail d'une formule et dans le CSV (entre « Matière » et « Poids »). Vide quand
+  la matière n'a pas de CAS (`.`, `mixture` ou vide dans le Kardex) ou n'est pas dans le fichier.
+- **Solutions** (`…10DP`, `…1CDP`, présentes dans le fichier sans CAS) : CAS de la matière de base (6 premiers caractères du code).
+- **Limite** : le rapprochement se fait sur le code matière du Kardex. Les formules d'une autre source qui utilisent
+  d'autres codes n'auront pas de CAS tant qu'il n'y a pas de correspondance de codes.
+
 ## Comptes utilisateurs (login / mot de passe)
 
 **Écran d'administration** : `https://explore.aquilegia.pro:8091/admin-comptes.html` (lien « Comptes » à côté du

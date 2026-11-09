@@ -27,10 +27,24 @@ public class FormuleController {
 
     private final FormuleRepository repo;
     private final ComptesService comptes;
+    private final CasService cas;
 
-    public FormuleController(FormuleRepository repo, ComptesService comptes) {
+    public FormuleController(FormuleRepository repo, ComptesService comptes, CasService cas) {
         this.repo = repo;
         this.comptes = comptes;
+        this.cas = cas;
+    }
+
+    /** Lignes de composition, avec le CAS de chaque matiere quand le Kardex le donne (sinon vide). */
+    private List<Map<String, Object>> lignesAvecCas(String key) {
+        List<Map<String, Object>> r = new java.util.ArrayList<>();
+        for (Map<String, Object> l : repo.lines(key)) {
+            Map<String, Object> m = new LinkedHashMap<>(l);
+            Object code = l.get("MATIERE_CD");
+            m.put("CAS", code == null ? null : cas.cas(code.toString()));
+            r.add(m);
+        }
+        return r;
     }
 
     /** Sources que le compte connecte peut voir : null = toutes. */
@@ -93,7 +107,7 @@ public class FormuleController {
         Map<String, Object> formule = formuleAutorisee(key, auth);
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("formule", formule);
-        List<Map<String, Object>> lignes = repo.lines(key);
+        List<Map<String, Object>> lignes = lignesAvecCas(key);
         result.put("lignes", lignes);
         result.put("nbIngredients", lignes.size());
         result.put("sommePoids", repo.sumPoids(key));
@@ -108,13 +122,14 @@ public class FormuleController {
         String lib = text(f.get("FORMULE_LIB"));
 
         StringBuilder sb = new StringBuilder("\uFEFF");
-        sb.append("Code formule;Libellé formule;Code matière;Matière;Poids\r\n");
-        for (Map<String, Object> l : repo.lines(key)) {
+        sb.append("Code formule;Libellé formule;Code matière;Matière;CAS;Poids\r\n");
+        for (Map<String, Object> l : lignesAvecCas(key)) {
             sb.append(cell(cd)).append(';').append(cell(lib)).append(';')
               .append(cell(text(l.get("MATIERE_CD")))).append(';').append(cell(text(l.get("MATIERE_LIB")))).append(';')
+              .append(cell(text(l.get("CAS")))).append(';')
               .append(number(l.get("FORMULE_POIDS"))).append("\r\n");
         }
-        sb.append(cell(cd)).append(';').append(cell(lib)).append(";;TOTAL;")
+        sb.append(cell(cd)).append(';').append(cell(lib)).append(";;TOTAL;;")
           .append(number(repo.sumPoids(key))).append("\r\n");
 
         String base = safeName(cd.isBlank() ? key : cd);

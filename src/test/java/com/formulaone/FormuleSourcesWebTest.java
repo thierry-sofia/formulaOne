@@ -57,6 +57,8 @@ class FormuleSourcesWebTest {
 
     @MockBean
     FormuleRepository repo;
+    @MockBean
+    CasService casService;
     @Autowired
     WebApplicationContext ctx;
     MockMvc mvc;
@@ -107,5 +109,22 @@ class FormuleSourcesWebTest {
         when(repo.sources(any())).thenReturn(List.of("BIS"));
         mvc.perform(get("/api/formules/sources").session(TestAuth.connecter(mvc, "alice", "motdepasse-1"))).andExpect(status().isOk());
         verify(repo).sources(Set.of("BIS"));
+    }
+
+    @Test
+    void csvContientLeCasQuandIlExisteEtResteVideSinon() throws Exception {
+        when(repo.lines("K1")).thenReturn(List.of(
+                Map.of("MATIERE_CD", "100750", "MATIERE_LIB", "CIS 3 HEXENOL", "FORMULE_POIDS", new java.math.BigDecimal("5")),
+                Map.of("MATIERE_CD", "ZZ", "MATIERE_LIB", "INCONNUE", "FORMULE_POIDS", new java.math.BigDecimal("2"))));
+        when(casService.cas("100750")).thenReturn("928-96-1");
+        when(casService.cas("ZZ")).thenReturn(null);
+
+        String csv = mvc.perform(get("/api/formules/K1/csv").session(TestAuth.connecter(mvc, "alice", "motdepasse-1")))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+
+        org.junit.jupiter.api.Assertions.assertTrue(csv.contains("Code matière;Matière;CAS;Poids"), csv);
+        org.junit.jupiter.api.Assertions.assertTrue(csv.contains("\"100750\";\"CIS 3 HEXENOL\";\"928-96-1\";5"), csv);
+        org.junit.jupiter.api.Assertions.assertTrue(csv.contains("\"ZZ\";\"INCONNUE\";\"\";2"), csv);
+        org.junit.jupiter.api.Assertions.assertTrue(csv.contains(";;TOTAL;;"), csv);
     }
 }

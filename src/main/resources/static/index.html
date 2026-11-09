@@ -63,9 +63,9 @@
     <p><a id="d-csv" href="#" download><button type="button">Télécharger en CSV</button></a></p>
     <div class="tablewrap">
       <table>
-        <thead><tr><th>Code matière</th><th>Matière</th><th class="num">Poids</th></tr></thead>
+        <thead><tr><th>Code matière</th><th>Matière</th><th>CAS</th><th class="num">Poids</th></tr></thead>
         <tbody id="lines"></tbody>
-        <tfoot><tr><th></th><th>Somme des poids</th><th class="num" id="d-sum"></th></tr></tfoot>
+        <tfoot><tr><th></th><th>Somme des poids</th><th></th><th class="num" id="d-sum"></th></tr></tfoot>
       </table>
     </div>
   </section>
@@ -133,7 +133,7 @@ async function showDetail(key) {
   body.replaceChildren();
   for (const l of d.lignes) {
     const tr = document.createElement('tr');
-    tr.append(cell(l.MATIERE_CD), cell(l.MATIERE_LIB), cell(l.FORMULE_POIDS, 'num'));
+    tr.append(cell(l.MATIERE_CD), cell(l.MATIERE_LIB), cell(l.CAS), cell(l.FORMULE_POIDS, 'num'));
     body.append(tr);
   }
   $('d-sum').textContent = d.sommePoids ?? '';
