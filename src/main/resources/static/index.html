@@ -33,6 +33,7 @@
   button:disabled { opacity:.4; cursor:default; }
   #detail { margin-top:28px; }
   .tablewrap { overflow-x:auto; }
+  .nb { margin:12px 0 0; font-size:15px; font-weight:600; }
 </style>
 </head>
 <body>
@@ -44,6 +45,8 @@
     <input id="q" type="search" placeholder="Nom ou code (jokers SQL : toto% = commence par toto, %toto, t_to)" autofocus>
     <input id="max" type="number" min="1" step="1" placeholder="Ingrédients max" aria-label="Nombre maximal d'ingrédients" style="flex:0 0 150px">
   </div>
+
+  <p id="nb" class="nb" role="status" aria-live="polite"></p>
 
   <div class="tablewrap">
     <table>
@@ -108,7 +111,10 @@ async function load() {
     body.append(tr);
   }
   const from = total ? page * SIZE + 1 : 0, to = Math.min((page + 1) * SIZE, total);
-  $('count').textContent = total + ' formule(s) — ' + from + ' à ' + to;
+  const fr = n => n.toLocaleString('fr-FR');
+  $('nb').textContent = total === 0 ? 'Aucune formule ne correspond à la recherche'
+      : fr(total) + (total === 1 ? ' formule correspond' : ' formules correspondent') + ' à la recherche';
+  $('count').textContent = fr(from) + ' à ' + fr(to) + ' sur ' + fr(total);
   document.querySelectorAll('th.sortable').forEach(th => {
     th.textContent = th.textContent.replace(/ [▲▼]$/, '') + (th.dataset.sort === sort ? (dir === 'asc' ? ' ▲' : ' ▼') : '');
   });
@@ -158,7 +164,7 @@ $('logout').onclick = async () => {
   location.replace('/login.html');
 };
 api('/api/formules/sources').then(list => { for (const v of list) { const o = document.createElement('option'); o.value = v; o.textContent = v; $('source').append(o); } }).catch(() => {});
-load().catch(e => { $('count').textContent = e.message; });
+load().catch(e => { $('nb').textContent = e.message; });
 </script>
 </body>
 </html>
